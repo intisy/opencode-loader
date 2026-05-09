@@ -1,6 +1,6 @@
 {
   "name": "opencode-launcher",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "TUI launcher for OpenCode - project switcher and plugin manager with oc command",
   "main": "plugin.js",
   "type": "module",
