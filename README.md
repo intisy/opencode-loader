@@ -1,4 +1,4 @@
-# opencode-launcher
+# opencode-hub
 
 TUI launcher and `oc` shell command for [OpenCode](https://github.com/sst/opencode).
 
@@ -27,8 +27,8 @@ If you have [opencode-plugin-updater](https://github.com/intisy/opencode-plugin-
 
 ```json
 {
-  "name": "opencode-launcher",
-  "url": "https://github.com/intisy/opencode-launcher.git",
+  "name": "opencode-hub",
+  "url": "https://github.com/intisy/opencode-hub.git",
   "install": null,
   "build": null,
   "bundle": null,
@@ -46,7 +46,7 @@ Add the package to your `~/.config/opencode/opencode.json`:
 
 ```jsonc
 {
-  "plugins": ["opencode-launcher@latest"]
+  "plugins": ["opencode-hub@latest"]
 }
 ```
 
@@ -55,9 +55,9 @@ Restart OpenCode.
 ### Option C — Manual
 
 ```bash
-mkdir -p ~/.config/opencode/repos/intisy/opencode-launcher
-git clone https://github.com/intisy/opencode-launcher.git ~/.config/opencode/repos/intisy/opencode-launcher
-cp ~/.config/opencode/repos/intisy/opencode-launcher/plugin.js ~/.config/opencode/plugins/oc-launcher.js
+mkdir -p ~/.config/opencode/repos/intisy/opencode-hub
+git clone https://github.com/intisy/opencode-hub.git ~/.config/opencode/repos/intisy/opencode-hub
+cp ~/.config/opencode/repos/intisy/opencode-hub/plugin.js ~/.config/opencode/plugins/oc-launcher.js
 ```
 
 Register the plugin in `~/.config/opencode/opencode.json`:
@@ -116,3 +116,4 @@ oc myproject    # Open first project matching "myproject"
 ## License
 
 MIT
+

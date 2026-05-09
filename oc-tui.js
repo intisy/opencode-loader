@@ -737,9 +737,10 @@ function render() {
   pushHead("");
   pushHead("  " + BOLD + CYAN + " OpenCode" + RST + GRAY + "  Launcher" + RST);
   pushHead("  " + GRAY + "-".repeat(barW) + RST);
+  var showPluginsTab = pluginItems.length > 0;
   var projTab = page === "projects" ? (BOLD + WHITE + BG_SEL + " Projects " + RST) : (GRAY + " Projects " + RST);
-  var plugTab = page === "plugins" ? (BOLD + WHITE + BG_SEL + " Plugins " + RST) : (GRAY + " Plugins " + RST);
-  pushHead("  " + projTab + "  " + plugTab + "    " + DIM + "<- ->" + RST);
+  var plugTab = showPluginsTab ? (page === "plugins" ? (BOLD + WHITE + BG_SEL + " Plugins " + RST) : (GRAY + " Plugins " + RST)) : "";
+  pushHead("  " + projTab + (showPluginsTab ? "  " + plugTab + "    " + DIM + "<- ->" + RST : ""));
   pushHead("");
 
   // 2. Build Body & Footer
@@ -813,8 +814,9 @@ function render() {
 function handleKey(key) {
   // Page switching with left/right (only in list mode, not in actions/input)
   if ((mode === "list") && (key === "left" || key === "right")) {
+    var showPluginsTab = pluginItems.length > 0;
     if (key === "left" && page === "plugins") { page = "projects"; mode = "list"; render(); return; }
-    if (key === "right" && page === "projects") { page = "plugins"; mode = "list"; render(); return; }
+    if (key === "right" && page === "projects" && showPluginsTab) { page = "plugins"; mode = "list"; render(); return; }
     return;
   }
 

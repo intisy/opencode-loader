@@ -1,29 +1,29 @@
 {
-  "name": "opencode-launcher",
-  "version": "1.0.1",
-  "description": "TUI launcher for OpenCode - project switcher and plugin manager with oc command",
-  "main": "plugin.js",
-  "type": "module",
-  "license": "MIT",
-  "author": "intisy",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/intisy/opencode-launcher.git"
-  },
-  "homepage": "https://github.com/intisy/opencode-launcher#readme",
-  "keywords": [
-    "opencode",
-    "launcher",
-    "tui",
-    "project-switcher",
-    "plugin"
-  ],
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "files": [
-    "plugin.js",
-    "oc-tui.js",
-    "README.md"
-  ]
+    "name":  "opencode-hub",
+    "version":  "1.0.1",
+    "description":  "TUI launcher for OpenCode - project switcher and plugin manager with oc command",
+    "main":  "plugin.js",
+    "type":  "module",
+    "license":  "MIT",
+    "author":  "intisy",
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/intisy/opencode-launcher.git"
+                   },
+    "homepage":  "https://github.com/intisy/opencode-launcher#readme",
+    "keywords":  [
+                     "opencode",
+                     "launcher",
+                     "tui",
+                     "project-switcher",
+                     "plugin"
+                 ],
+    "engines":  {
+                    "node":  "\u003e=20.0.0"
+                },
+    "files":  [
+                  "plugin.js",
+                  "oc-tui.js",
+                  "README.md"
+              ]
 }
