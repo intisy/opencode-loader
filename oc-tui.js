@@ -74,6 +74,20 @@ function checkForUpdates() {
     execSync("npm install -g opencode-ai@latest", { stdio: "inherit", timeout: 120000 });
     process.stderr.write("\x1b[32m  > Updated to " + latest + "\x1b[0m\n\n");
   } catch (e) {}
+
+  // Auto-update NPM plugins
+  try {
+    var ocPath = join(CONFIG_DIR, "opencode.json");
+    if (existsSync(ocPath)) {
+      var oc = JSON.parse(readFileSync(ocPath, "utf-8"));
+      var pluginsArr = oc.plugin || oc.plugins || [];
+      var npmPlugs = pluginsArr.filter(function(p) { return typeof p === "string" && p.includes("@latest") && !p.startsWith("."); });
+      if (npmPlugs.length > 0) {
+        process.stderr.write("\x1b[33m  > Auto-updating NPM plugins: " + npmPlugs.join(", ") + "\x1b[0m\n");
+        execSync("npm install --no-save " + npmPlugs.join(" "), { cwd: CONFIG_DIR, stdio: "ignore", timeout: 60000 });
+      }
+    }
+  } catch (e) {}
 }
 
 checkForUpdates();
