@@ -1,5 +1,11 @@
 # opencode-hub
 
+
+[![npm version](https://img.shields.io/npm/v/opencode-hub)](https://www.npmjs.com/package/opencode-hub)
+[![npm downloads](https://img.shields.io/npm/dm/opencode-hub)](https://www.npmjs.com/package/opencode-hub)
+[![CI](https://github.com/intisy/opencode-hub/actions/workflows/publish.yml/badge.svg)](https://github.com/intisy/opencode-hub/actions/workflows/publish.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 TUI launcher and `oc` shell command for [OpenCode](https://github.com/sst/opencode).
 
 When loaded as an OpenCode plugin, it installs the `oc` command into your shell. Running `oc` opens an interactive TUI for switching between projects and managing plugins.
