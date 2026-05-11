@@ -9,11 +9,12 @@ var HOME = homedir();
 var CONFIG_DIR = join(HOME, ".config", "opencode");
 var DB_PATH = join(HOME, ".local", "share", "opencode", "opencode.db");
 var CONFIG_FOLDER = join(CONFIG_DIR, "config");
+var CACHE_DIR = join(CONFIG_DIR, "cache");
 var CONFIG_PATH = join(CONFIG_FOLDER, "oc-config.json");
-var UPDATE_CHECK_PATH = join(CONFIG_DIR, "oc-last-update-check");
+var UPDATE_CHECK_PATH = join(CACHE_DIR, "oc-last-update-check");
 var PLUGINS_JSON = join(CONFIG_FOLDER, "plugins.json");
 var REPOS_DIR = join(CONFIG_DIR, "repos");
-var PLUGINS_DIR = join(CONFIG_DIR, "plugins");
+var PLUGINS_DIR = join(CONFIG_DIR, "plugin");
 
 // ---------------------------------------------------------------------------
 // Folder name helper: <creator>/<repo-name> to avoid collisions
@@ -49,12 +50,19 @@ migrateConfigs();
 
 function checkForUpdates() {
   try {
+    var legacyCheck = join(CONFIG_DIR, "oc-last-update-check");
+    if (!existsSync(UPDATE_CHECK_PATH) && existsSync(legacyCheck)) {
+      try {
+        if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
+        copyFileSync(legacyCheck, UPDATE_CHECK_PATH);
+      } catch {}
+    }
     if (existsSync(UPDATE_CHECK_PATH)) {
       var lastCheck = parseInt(readFileSync(UPDATE_CHECK_PATH, "utf-8").trim(), 10);
       if (Date.now() - lastCheck < 86400000) return;
     }
 
-    if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true });
+    if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
     writeFileSync(UPDATE_CHECK_PATH, String(Date.now()));
 
     var installed = execSync("opencode --version", { encoding: "utf-8", timeout: 10000 }).trim();
@@ -252,11 +260,20 @@ function runPluginUpdate(pluginItem) {
     var parentDir = dirname(dir);
     if (!existsSync(parentDir)) try { mkdirSync(parentDir, { recursive: true }); } catch {}
     try {
-      execSync("git clone " + repo.url + " " + folderName, { cwd: REPOS_DIR, timeout: 60000, stdio: "ignore" });
+      var cloneCmd = "git clone " + repo.url + (repo.branch ? " --branch " + repo.branch : "") + " " + folderName;
+            execSync(cloneCmd, { cwd: REPOS_DIR, timeout: 60000, stdio: "ignore" });
     } catch (e) { return "Clone failed: " + (e.message || e); }
   }
 
-  try { execSync("git pull --ff-only", { cwd: dir, timeout: 30000, stdio: "ignore" }); } catch {}
+  try {
+      if (repo.branch) {
+        execSync("git fetch origin", { cwd: dir, timeout: 30000, stdio: "ignore" });
+        execSync("git checkout " + repo.branch, { cwd: dir, timeout: 10000, stdio: "ignore" });
+        execSync("git pull --ff-only origin " + repo.branch, { cwd: dir, timeout: 30000, stdio: "ignore" });
+      } else {
+        execSync("git pull --ff-only", { cwd: dir, timeout: 30000, stdio: "ignore" });
+      }
+    } catch {}
 
   if (repo.install) {
     try { execSync(repo.install.join(" "), { cwd: dir, timeout: 120000, stdio: "ignore" }); }
