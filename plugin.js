@@ -12,10 +12,10 @@ function findTuiScript() {
   var sameDirPath = join(import.meta.dir, "oc-tui.js");
   if (existsSync(sameDirPath)) return sameDirPath;
 
-  // 2. Find config dir, then check repos/intisy/opencode-launcher/ (updater case)
+  // 2. Find config dir, then check repos/intisy/opencode-hub/ (updater case)
   var configDir = findConfigDir(import.meta.dir);
   if (configDir) {
-    var repoPath = join(configDir, "repos", "intisy", "opencode-launcher", "oc-tui.js");
+    var repoPath = join(configDir, "repos", "intisy", "opencode-hub", "oc-tui.js");
     if (existsSync(repoPath)) return repoPath;
   }
 
@@ -51,6 +51,18 @@ function installOcCommand() {
 
   var binDir = getBinDir();
   if (!existsSync(binDir)) try { mkdirSync(binDir, { recursive: true }); } catch {}
+
+  // Always keep binDir/oc-tui.js in sync with the source (so `oc` always runs latest)
+  var binTuiPath = join(binDir, "oc-tui.js");
+  try {
+    var srcContent = readFileSync(tuiPath, "utf-8");
+    var dstContent = existsSync(binTuiPath) ? readFileSync(binTuiPath, "utf-8") : null;
+    if (srcContent !== dstContent) {
+      writeFileSync(binTuiPath, srcContent, "utf-8");
+    }
+  } catch {}
+  // Point shell launchers at the stable binDir copy
+  tuiPath = binTuiPath;
 
   var tuiPathEscaped = tuiPath.replace(/\\/g, "\\\\");
 

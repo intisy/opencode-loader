@@ -34,7 +34,15 @@ function loadNpmPlugins() {
         var name = p.replace(/@[^@\/]+$/, "") || p;
         var version = "";
         try {
+          // First try config-local node_modules, then global npm node_modules
           var pkgPath = join(CONFIG_DIR, "node_modules", name, "package.json");
+          if (!existsSync(pkgPath)) {
+            // Global npm fallback (Windows: AppData/Roaming/npm/node_modules, Unix: prefix/lib/node_modules)
+            var globalNpm = process.platform === "win32"
+              ? join(homedir(), "AppData", "Roaming", "npm", "node_modules")
+              : join("/usr", "lib", "node_modules");
+            pkgPath = join(globalNpm, name, "package.json");
+          }
           if (existsSync(pkgPath)) {
             version = JSON.parse(readFileSync(pkgPath, "utf-8")).version || "";
           }
@@ -427,7 +435,8 @@ function getPluginActions(pitem) {
   } else {
     a.push({ key: "enable-auto", label: "Enable auto-update" });
   }
-  a.push({ key: "force-update", label: "Force rebuild & deploy" });
+  a.push({ key: "update", label: "Force rebuild & deploy" });
+  a.push({ key: "update-all", label: "Update all plugins" });
   a.push({ key: "commits", label: "Select specific commit (Downgrade)" });
   a.push({ key: "disable-plugin", label: "Disable plugin" });
   a.push({ key: "cancel", label: "Cancel" });
@@ -779,9 +788,9 @@ function buildPlugins(pushBody, pushFoot, cols, barW) {
   } else {
     pushFoot("  " + DIM + "^v" + RST + "/" + DIM + "WS" + RST + " Move  " +
       DIM + "Enter" + RST + " Select  " +
-      DIM + "F" + RST + " Fetch  " +
-      DIM + "A" + RST + " Toggle auto  " +
       DIM + "U" + RST + " Update  " +
+      DIM + "D" + RST + " Disable  " +
+      DIM + "A" + RST + " Toggle auto  " +
       DIM + "Q" + RST + " Quit" + RST);
   }
 }
@@ -970,6 +979,19 @@ function handlePluginKey(key) {
         flash(err ? p.name + ": " + err : p.name + " updated. Restart OpenCode to apply.");
       }
     }
+    else if (key === "d") {
+      if (pluginItems.length > 0) {
+        var p = pluginItems[pcursor];
+        var plugins = loadPlugins();
+        var match = plugins.find(function(r) { return r.name === p.name; });
+        if (match) { match.enabled = false; savePlugins(plugins); }
+        var deployedPath = join(PLUGINS_DIR, p.pluginFile);
+        if (existsSync(deployedPath)) { try { unlinkSync(deployedPath); } catch {} }
+        pluginItems = buildPluginList();
+        if (pcursor >= pluginItems.length) pcursor = Math.max(0, pluginItems.length - 1);
+        flash(p.name + " disabled. Restart OpenCode to unload.");
+      }
+    }
     else if (key === "q" || key === "escape") { cleanup(); process.exit(1); }
   } else if (mode === "pactions") {
     var pitem = pluginItems[pcursor];
@@ -978,13 +1000,26 @@ function handlePluginKey(key) {
     else if (key === "down" || key === "s") { pacursor = Math.min(acts.length - 1, pacursor + 1); }
     else if (key === "enter" || key === "space") {
       var action = acts[pacursor].key;
-      if (action === "update" || action === "force-update") {
+      if (action === "update") {
         flash("Updating " + pitem.name + "...");
         render();
         var err = runPluginUpdate(pitem);
         pluginItems = buildPluginList();
         if (pcursor >= pluginItems.length) pcursor = Math.max(0, pluginItems.length - 1);
         flash(err ? pitem.name + ": " + err : pitem.name + " updated. Restart OpenCode to apply.");
+        mode = "list";
+      }
+      else if (action === "update-all") {
+        var errors = [];
+        for (var pi of pluginItems) {
+          flash("Updating " + pi.name + "...");
+          render();
+          var e = runPluginUpdate(pi);
+          if (e) errors.push(pi.name + ": " + e);
+        }
+        pluginItems = buildPluginList();
+        if (pcursor >= pluginItems.length) pcursor = Math.max(0, pluginItems.length - 1);
+        flash(errors.length > 0 ? errors.join("; ") : "All plugins updated. Restart OpenCode to apply.");
         mode = "list";
       }
       else if (action === "enable-auto" || action === "disable-auto") {
