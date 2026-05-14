@@ -36,12 +36,14 @@ function loadNpmPlugins() {
         try {
           // OpenCode installs npm plugins into ~/.cache/opencode/node_modules
           var cachePkg = join(homedir(), ".cache", "opencode", "node_modules", name, "package.json");
-          // Fallback: config-local node_modules, then global npm
+          // Fallback: config-local node_modules, then global npm, then local repos
           var globalNpm = process.platform === "win32"
             ? join(homedir(), "AppData", "Roaming", "npm", "node_modules")
             : join("/usr", "lib", "node_modules");
+          var repoPkg = join(CONFIG_DIR, "repos", "intisy", name, "package.json");
           var pkgPath = existsSync(cachePkg) ? cachePkg
             : existsSync(join(CONFIG_DIR, "node_modules", name, "package.json")) ? join(CONFIG_DIR, "node_modules", name, "package.json")
+            : existsSync(repoPkg) ? repoPkg
             : join(globalNpm, name, "package.json");
           if (existsSync(pkgPath)) {
             version = JSON.parse(readFileSync(pkgPath, "utf-8")).version || "";
