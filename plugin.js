@@ -4,18 +4,18 @@ import { join, dirname } from "path";
 import { homedir } from "os";
 
 // ---------------------------------------------------------------------------
-// Find oc-tui.js — works for both npm and plugin-updater installs
+// Find core/tui.js — works for both npm and plugin-updater installs
 // ---------------------------------------------------------------------------
 
 function findTuiScript() {
   // 1. Same directory as this plugin file (npm install case)
-  var sameDirPath = join(import.meta.dir, "oc-tui.js");
+  var sameDirPath = join(import.meta.dir, "core/tui.js");
   if (existsSync(sameDirPath)) return sameDirPath;
 
   // 2. Find config dir, then check repos/intisy/opencode-hub/ (updater case)
   var configDir = findConfigDir(import.meta.dir);
   if (configDir) {
-    var repoPath = join(configDir, "repos", "intisy", "opencode-hub", "oc-tui.js");
+    var repoPath = join(configDir, "repos", "intisy", "opencode-hub", "core/tui.js");
     if (existsSync(repoPath)) return repoPath;
   }
 
@@ -52,8 +52,8 @@ function installOcCommand() {
   var binDir = getBinDir();
   if (!existsSync(binDir)) try { mkdirSync(binDir, { recursive: true }); } catch {}
 
-  // Always keep binDir/oc-tui.js in sync with the source (so `oc` always runs latest)
-  var binTuiPath = join(binDir, "oc-tui.js");
+  // Always keep binDir/core/tui.js in sync with the source (so `oc` always runs latest)
+  var binTuiPath = join(binDir, "core/tui.js");
   try {
     var srcContent = readFileSync(tuiPath, "utf-8");
     var dstContent = existsSync(binTuiPath) ? readFileSync(binTuiPath, "utf-8") : null;
