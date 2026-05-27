@@ -7,13 +7,13 @@ import { homedir } from "os";
 // Find core/tui.js — works for both npm and plugin-updater installs
 // ---------------------------------------------------------------------------
 
-function findTuiScript() {
-  // 1. Same directory as this plugin file (npm install case)
-  var sameDirPath = join(import.meta.dir, "core/tui.js");
-  if (existsSync(sameDirPath)) return sameDirPath;
-
-  // 2. Find config dir, then check repos/intisy/opencode-hub/ (updater case)
-  var configDir = findConfigDir(import.meta.dir);
+  function findTuiScript() {
+    // 1. Same directory as this plugin file (npm install case)
+    var sameDirPath = join(__dirname, "core/tui.js");
+    if (existsSync(sameDirPath)) return sameDirPath;
+  
+    // 2. Find config dir, then check repos/intisy/opencode-hub/ (updater case)
+    var configDir = findConfigDir(__dirname);
   if (configDir) {
     var repoPath = join(configDir, "repos", "intisy", "opencode-hub", "core/tui.js");
     if (existsSync(repoPath)) return repoPath;
@@ -56,6 +56,13 @@ function installOcCommand() {
   var binTuiPath = join(binDir, "core/tui.js");
   try {
     var srcContent = readFileSync(tuiPath, "utf-8");
+    
+    // Inject auth login interception specific to opencode
+    srcContent = srcContent.replace(
+      'process.on("SIGTERM", function() { cleanup(); process.exit(1); });',
+      'process.on("SIGTERM", function() { cleanup(); process.exit(1); });\n\n// --- INJECTED AUTH LOGIN INTERCEPTION ---\nif (process.argv[2] === "auth" && process.argv[3] === "login") {\n  var _code = require("child_process").spawnSync(process.argv[0], [require("path").join(__dirname, "..", "oc-auth.js")], { stdio: "inherit" }).status;\n  if (_code !== 42) process.exit(0);\n}\n// ----------------------------------------\n'
+    );
+
     var dstContent = existsSync(binTuiPath) ? readFileSync(binTuiPath, "utf-8") : null;
     if (srcContent !== dstContent) {
       writeFileSync(binTuiPath, srcContent, "utf-8");
