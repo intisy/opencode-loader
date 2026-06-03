@@ -1,4 +1,4 @@
-﻿import { existsSync, writeFileSync, mkdirSync, readFileSync } from "fs";
+import { existsSync, writeFileSync, mkdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
@@ -10,6 +10,7 @@ async function runUpdater() {
     let updaterModule = null;
   const localUpdaterPath = join(configDir, "plugin", "plugin-updater", "index.js");
   const fallbackUpdaterPath = join(configDir, "plugin", "opencode-plugin-updater", "index.js");
+  const npmUpdaterPath = join(configDir, "node_modules", "plugin-updater", "index.js");
   
   try {
     // Try NPM resolution first
@@ -19,6 +20,8 @@ async function runUpdater() {
       // Try local plugin path
       if (existsSync(localUpdaterPath)) {
         updaterModule = await import("file://" + localUpdaterPath.replace(/\\/g, "/"));
+      } else if (existsSync(npmUpdaterPath)) {
+        updaterModule = await import("file://" + npmUpdaterPath.replace(/\\/g, "/"));
       } else if (existsSync(fallbackUpdaterPath)) {
         updaterModule = await import("file://" + fallbackUpdaterPath.replace(/\\/g, "/"));
       }
