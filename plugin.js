@@ -7,7 +7,8 @@ import { homedir } from "os";
 // Run Plugin Updater
 // ---------------------------------------------------------------------------
 async function runUpdater() {
-  const updaterPath = join(homedir(), ".config", "github", "plugin-updater", "index.js");
+  const configDir = join(homedir(), ".config", "opencode");
+  const updaterPath = join(configDir, "plugin", "plugin-updater", "index.js");
   if (existsSync(updaterPath)) {
     try {
       const updaterModule = await import("file://" + updaterPath.replace(/\\/g, "/"));
