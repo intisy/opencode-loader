@@ -1,5 +1,4 @@
-import { tool } from "@opencode-ai/plugin";
-import { existsSync, writeFileSync, mkdirSync, readFileSync } from "fs";
+﻿import { existsSync, writeFileSync, mkdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
@@ -18,10 +17,6 @@ async function runUpdater() {
         updater.earlyLaunch(configDir);
       }
 
-      // Update core-hub
-      updater.updatePlugin("core-hub", "https://github.com/intisy/core-hub.git");
-      updater.deployToExecutionDir("core-hub", join(homedir(), ".local", "bin"));
-
       // Update plugins from plugins.json
       const pluginsJsonPath = join(configDir, "config", "plugins.json");
       if (existsSync(pluginsJsonPath)) {
@@ -34,16 +29,6 @@ async function runUpdater() {
               updater.updatePlugin(plugin.name, plugin.url, branch, commit);
               updater.deployToExecutionDir(plugin.name, join(configDir, "plugin"));
             }
-          }
-        } catch (e) {
-          console.error("[OpenCode Hub] Failed to parse plugins.json", e);
-        }
-      }
-    } catch (e) {
-      console.error("[OpenCode Hub] Failed to run plugin-updater", e);
-    }
-  }
-}
           }
         } catch (e) {
           console.error("[OpenCode Hub] Failed to parse plugins.json", e);
@@ -68,7 +53,8 @@ async function installOcCommand() {
   const binDir = getBinDir();
   if (!existsSync(binDir)) try { mkdirSync(binDir, { recursive: true }); } catch {}
   
-  const binTuiPath = join(binDir, "core-hub", "tui.js");
+  const configDir = join(homedir(), ".config", "opencode");
+  const binTuiPath = join(configDir, "plugin", "opencode-hub", "core", "tui.js");
   if (!existsSync(binTuiPath)) return; // Wait for updater to succeed next time
 
   const tuiPathEscaped = binTuiPath.replace(/\\/g, "\\\\");
@@ -84,18 +70,11 @@ async function installOcCommand() {
     try { import("child_process").then(cp => cp.execSync(`chmod +x "${shPath}"`)); } catch {}
   }
 
-  // Add path notice if needed
-  if (process.env.PATH && !process.env.PATH.includes(binDir)) {
-    console.log(`[OpenCode Hub] Note: Add ${binDir} to your PATH to use the 'oc' command.`);
-  }
-}
-
-function uninstallOcCommand() {
-  const binDir = getBinDir();
+  // Remove old command format if it exists
   if (process.platform === "win32") {
-    try { import("fs").then(fs => fs.unlinkSync(join(binDir, "oc.cmd"))); } catch {}
-  } else {
     try { import("fs").then(fs => fs.unlinkSync(join(binDir, "oc"))); } catch {}
+  } else {
+    try { import("fs").then(fs => fs.unlinkSync(join(binDir, "oc.cmd"))); } catch {}
   }
 }
 
@@ -105,15 +84,7 @@ function uninstallOcCommand() {
 export async function activate() {
   try {
     await installOcCommand();
-  } catch (err) {
-    console.error("[OpenCode Hub] error during activation:", err);
-  }
-}
-
-export function deactivate() {
-  try {
-    uninstallOcCommand();
-  } catch (err) {
-    console.error("[OpenCode Hub] error during deactivation:", err);
+  } catch (e) {
+    console.error("[OpenCode Hub] Failed to initialize:", e);
   }
 }
