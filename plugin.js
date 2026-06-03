@@ -19,7 +19,7 @@ async function runUpdater() {
 
       // Update plugins from plugins.json
       const configDir = join(homedir(), ".config", "opencode");
-      const pluginsJsonPath = join(configDir, "plugins.json");
+      const pluginsJsonPath = join(configDir, "config", "plugins.json");
       if (existsSync(pluginsJsonPath)) {
         try {
           const plugins = JSON.parse(readFileSync(pluginsJsonPath, "utf-8"));
