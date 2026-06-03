@@ -91,9 +91,9 @@ async function installOcCommand() {
 
   // Remove old command format if it exists
   if (process.platform === "win32") {
-    try { import("fs").then(fs => fs.unlinkSync(join(binDir, "oc"))); } catch {}
+    import("fs").then(fs => { try { fs.unlinkSync(join(binDir, "oc")); } catch {} }).catch(()=>{});
   } else {
-    try { import("fs").then(fs => fs.unlinkSync(join(binDir, "oc.cmd"))); } catch {}
+    import("fs").then(fs => { try { fs.unlinkSync(join(binDir, "oc.cmd")); } catch {} }).catch(()=>{});
   }
 }
 
