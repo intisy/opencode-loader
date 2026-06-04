@@ -106,5 +106,6 @@ export async function activate() {
   } catch (e) {
     console.error("[OpenCode Hub] Failed to initialize:", e);
   }
+  return {};
 }
 
