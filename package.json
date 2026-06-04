@@ -1,5 +1,5 @@
 {
-  "name": "opencode-hub",
+  "name": "opencode-loader",
   "version": "1.0.0",
   "description": "",
   "main": "dist/plugin.js",
