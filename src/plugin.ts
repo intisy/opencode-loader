@@ -1,22 +1,21 @@
-import { appendFileSync,  } from "fs";
+import { existsSync, writeFileSync, mkdirSync, readFileSync, appendFileSync } from "fs";
 import { join } from "path";
+import { homedir } from "os";
 
+const START_TIME = new Date().toISOString().replace(/:/g, "-").split(".")[0];
 
 function writeLog(configDir: string, message: string, isError: boolean = false) {
   try {
     const date = new Date();
-    const dateStr = date.toISOString().split('T')[0];
-    const logsDir = join(configDir, 'logs', dateStr);
-    if (!existsSync(logsDir)) {
-      mkdirSync(logsDir, { recursive: true });
-    }
-    const logFile = join(logsDir, 'loader.log');
-    const prefix = isError ? '[ERROR]' : '[INFO]';
-    const logMsg = '[' + date.toISOString() + '] ' + prefix + ' ' + message + '\n';
+    const dateStr = date.toISOString().split("T")[0];
+    const logsDir = join(configDir, "logs", dateStr);
+    if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true });
+    const logFile = join(logsDir, `loader-${START_TIME}.log`);
+    const prefix = isError ? "[ERROR]" : "[INFO]";
+    const logMsg = "[" + date.toISOString() + "] " + prefix + " " + message + "\n";
     appendFileSync(logFile, logMsg);
   } catch (e) {}
 }
-
 
 function getAppConfigDir() {
   const home = homedir();
@@ -25,12 +24,12 @@ function getAppConfigDir() {
   return existsSync(directPath) ? directPath : configPath;
 }
 
-// ---------------------------------------------------------------------------
-// General Bootstrapper
-// ---------------------------------------------------------------------------
 async function runEarlyLaunchHooks(configDir: string) {
   const pluginsJsonPath = join(configDir, "config", "plugins.json");
-  if (!existsSync(pluginsJsonPath)) return;
+  if (!existsSync(pluginsJsonPath)) {
+    writeLog(configDir, "No plugins.json found at " + pluginsJsonPath);
+    return;
+  }
 
   let plugins: any[] = [];
   try {
@@ -40,28 +39,35 @@ async function runEarlyLaunchHooks(configDir: string) {
     return;
   }
 
+  writeLog(configDir, "Found " + plugins.length + " plugins in plugins.json");
+
   for (const plugin of plugins) {
     if (plugin.enabled === false) continue;
-    
+
     let mod: any = null;
     const namesToTry = [plugin.name];
-    if (plugin.name === "plugin-updater") namesToTry.push("opencode-plugin-updater");
-    
+
     for (const pName of namesToTry) {
       try {
-        // 1. Try NPM resolution
         mod = await import(pName);
+        writeLog(configDir, "Loaded " + pName + " via NPM resolution");
         break;
       } catch (e1) {
-        // 2. Try single-file plugin
         const singleFile = join(configDir, "plugin", `${pName}.js`);
         if (existsSync(singleFile)) {
-          try { mod = await import("file://" + singleFile.replace(/\\/g, "/")); break; } catch (e) {}
+          try {
+            mod = await import("file://" + singleFile.replace(/\\/g, "/"));
+            writeLog(configDir, "Loaded " + pName + " from single-file plugin");
+            break;
+          } catch (e) {}
         }
-        // 3. Try directory plugin
         const dirFile = join(configDir, "plugin", pName, "index.js");
         if (existsSync(dirFile)) {
-          try { mod = await import("file://" + dirFile.replace(/\\/g, "/")); break; } catch (e) {}
+          try {
+            mod = await import("file://" + dirFile.replace(/\\/g, "/"));
+            writeLog(configDir, "Loaded " + pName + " from directory plugin");
+            break;
+          } catch (e) {}
         }
       }
     }
@@ -70,67 +76,83 @@ async function runEarlyLaunchHooks(configDir: string) {
       try {
         const p = mod.default || mod;
         if (typeof p.earlyLaunch === "function") {
+          writeLog(configDir, "Running earlyLaunch for " + plugin.name);
           await p.earlyLaunch(configDir, plugins);
-        }
-        
-        // TEMPORARY: Ensure plugin-updater still handles updates since we removed hardcoded update loops
-        if (plugin.name === "plugin-updater" && typeof p.updatePlugin === "function") {
-          for (const pl of plugins) {
-            if (pl.url && pl.enabled !== false && pl.type !== "npm") {
-              p.updatePlugin(pl.name, pl.url, pl.branch || null, pl.commit || null);
-              p.deployToExecutionDir(pl.name, join(configDir, "plugin"));
-            }
-          }
+          writeLog(configDir, "Finished earlyLaunch for " + plugin.name);
         }
       } catch (e) {
-        console.error(`[OpenCode Hub] Failed to run earlyLaunch for ${plugin.name}`, e);
+        writeLog(configDir, "Failed earlyLaunch for " + plugin.name + ": " + e, true);
       }
+    } else {
+      writeLog(configDir, "Could not load plugin: " + plugin.name, true);
     }
   }
 }
 
-// ---------------------------------------------------------------------------
-// Install / remove the `oc` shell command
-// ---------------------------------------------------------------------------
-function getBinDir(configDir: string) {
+function getBinDir() {
   return join(homedir(), ".local", "bin");
 }
 
-async function installOcCommand() {
-  const configDir = getAppConfigDir();
-  await runEarlyLaunchHooks(configDir);
-
-  const binDir = getBinDir(configDir);
+function installOcWrapper(configDir: string) {
+  const binDir = getBinDir();
   if (!existsSync(binDir)) try { mkdirSync(binDir, { recursive: true }); } catch {}
-  
-  // Point to the compiled tui.js inside the repos directory
-  const binTuiPath = join(configDir, "repos", "opencode-hub", "core", "dist", "tui.js");
-  if (!existsSync(binTuiPath)) return; // Wait for updater to succeed next time
 
-  const tuiPathEscaped = binTuiPath.replace(/\\/g, "\\\\");
+  const binTuiPath = join(configDir, "repos", "opencode-loader", "core", "dist", "tui.js");
+  if (!existsSync(binTuiPath)) {
+    writeLog(configDir, "tui.js not found at " + binTuiPath + ", skipping wrapper install");
+    return;
+  }
+
+  writeLog(configDir, "Installing oc wrapper pointing to " + binTuiPath);
 
   if (process.platform === "win32") {
     const cmdPath = join(binDir, "oc.cmd");
-    const cmdContent = `@echo off\nnode "${tuiPathEscaped}" %*`;
-    writeFileSync(cmdPath, cmdContent, "utf-8");
-    import("fs").then(fs => { try { fs.unlinkSync(join(binDir, "oc")); } catch {} }).catch(()=>{});
+    const tuiEscaped = binTuiPath.replace(/\\/g, "\\\\");
+    writeFileSync(cmdPath, `@echo off\r\nbun run "${tuiEscaped}" %*\r\n`, "utf-8");
+    try { const fs = require("fs"); fs.unlinkSync(join(binDir, "oc")); } catch {}
   } else {
     const shPath = join(binDir, "oc");
-    const shContent = `#!/bin/sh\nnode "${tuiPathEscaped}" "$@"`;
-    writeFileSync(shPath, shContent, "utf-8");
-    import("child_process").then(cp => { try { cp.execSync(`chmod +x "${shPath}"`); } catch {} }).catch(()=>{});
-    import("fs").then(fs => { try { fs.unlinkSync(join(binDir, "oc.cmd")); } catch {} }).catch(()=>{});
+    const lines = [
+      "#!/usr/bin/env bash",
+      'export OC_OUTPUT="${TEMP:-${TMPDIR:-/tmp}}/oc-dir-$$.txt"',
+      `bun run "${binTuiPath}" "$@"`,
+      "EXIT=$?",
+      'if [ $EXIT -eq 42 ]; then',
+      '  rm -f "$OC_OUTPUT"',
+      '  exec opencode "$@"',
+      "fi",
+      'if [ $EXIT -eq 0 ] && [ -f "$OC_OUTPUT" ]; then',
+      '  DIR=$(cat "$OC_OUTPUT")',
+      '  rm -f "$OC_OUTPUT"',
+      '  if [ -n "$DIR" ]; then cd "$DIR" && exec opencode; fi',
+      "fi",
+      'rm -f "$OC_OUTPUT"',
+      "exit $EXIT",
+    ];
+    writeFileSync(shPath, lines.join("\n") + "\n", { mode: 0o755 });
+    try { require("child_process").execSync(`chmod +x "${shPath}"`); } catch {}
+    try { const fs = require("fs"); fs.unlinkSync(join(binDir, "oc.cmd")); } catch {}
   }
+
+  writeLog(configDir, "Wrapper installed successfully");
 }
 
-// ---------------------------------------------------------------------------
-// Extension Hook
-// ---------------------------------------------------------------------------
 export async function activate() {
+  const configDir = getAppConfigDir();
+  writeLog(configDir, "OpenCode Launcher activating");
+
   try {
-    await installOcCommand();
+    await runEarlyLaunchHooks(configDir);
   } catch (e) {
-    console.error("[OpenCode Hub] Failed to initialize:", e);
+    writeLog(configDir, "Failed during earlyLaunch hooks: " + e, true);
   }
+
+  try {
+    installOcWrapper(configDir);
+  } catch (e) {
+    writeLog(configDir, "Failed to install oc wrapper: " + e, true);
+  }
+
+  writeLog(configDir, "OpenCode Launcher activation complete");
   return {};
 }

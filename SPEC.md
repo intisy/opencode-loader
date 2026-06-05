@@ -1,4 +1,4 @@
-# OpenCode Hub - Specifications & Test Requirements
+# OpenCode Launcher - Specifications & Test Requirements
 
 ## Goal
 Centralized launcher, project manager, and marketplace for OpenCode.
