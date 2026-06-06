@@ -114,6 +114,7 @@ function installOcWrapper(configDir: string) {
     const shPath = join(binDir, "oc");
     const lines = [
       "#!/usr/bin/env bash",
+      'export PATH="$HOME/.bun/bin:$PATH"',
       'export OC_OUTPUT="${TEMP:-${TMPDIR:-/tmp}}/oc-dir-$$.txt"',
       `bun run "${binTuiPath}" "$@"`,
       "EXIT=$?",
