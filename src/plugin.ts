@@ -136,6 +136,7 @@ function installOcWrapper(configDir: string) {
       ? [
           "#!/usr/bin/env bash",
           'export PATH="$HOME/.bun/bin:$PATH"',
+          'if ! command -v bun &>/dev/null; then exec opencode "$@"; fi',
           'export OC_OUTPUT="${TEMP:-${TMPDIR:-/tmp}}/oc-dir-$$.txt"',
           `bun run "${binTuiPath}" "$@"`,
           "EXIT=$?",
