@@ -4,16 +4,31 @@ import { homedir } from "os";
 
 const START_TIME = new Date().toISOString().replace(/:/g, "-").split(".")[0];
 
-function writeLog(configDir: string, message: string, isError: boolean = false) {
+let PLUGIN_CONFIG: Record<string, unknown> | null = null;
+function getPluginConfig(configDir: string): Record<string, unknown> {
+  if (PLUGIN_CONFIG !== null) return PLUGIN_CONFIG;
   try {
-    const date = new Date();
-    const dateStr = date.toISOString().split("T")[0];
-    const logsDir = join(configDir, "logs", dateStr);
-    if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true });
-    const logFile = join(logsDir, `loader-${START_TIME}.log`);
-    const prefix = isError ? "[ERROR]" : "[INFO]";
-    const logMsg = "[" + date.toISOString() + "] " + prefix + " " + message + "\n";
-    appendFileSync(logFile, logMsg);
+    const preferred = join(configDir, "config", "opencode-loader.json");
+    const fallback  = join(configDir, "opencode-loader.json");
+    const p = existsSync(preferred) ? preferred : existsSync(fallback) ? fallback : null;
+    PLUGIN_CONFIG = p ? JSON.parse(readFileSync(p, "utf-8")) : {};
+  } catch { PLUGIN_CONFIG = {}; }
+  return PLUGIN_CONFIG;
+}
+
+function writeLog(configDir: string, message: string, isError: boolean = false) {
+  const loggingEnabled = getPluginConfig(configDir).logging !== false;
+  try {
+    if (loggingEnabled) {
+      const date = new Date();
+      const dateStr = date.toISOString().split("T")[0];
+      const logsDir = join(configDir, "logs", dateStr);
+      if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true });
+      const logFile = join(logsDir, `opencode-loader-${START_TIME}.log`);
+      const prefix = isError ? "[ERROR]" : "[INFO]";
+      const logMsg = "[" + date.toISOString() + "] " + prefix + " " + message + "\n";
+      appendFileSync(logFile, logMsg);
+    }
   } catch (e) {}
 }
 
@@ -98,44 +113,54 @@ function installOcWrapper(configDir: string) {
   if (!existsSync(binDir)) try { mkdirSync(binDir, { recursive: true }); } catch {}
 
   const binTuiPath = join(configDir, "repos", "opencode-loader", "core", "dist", "tui.js");
-  if (!existsSync(binTuiPath)) {
-    writeLog(configDir, "tui.js not found at " + binTuiPath + ", skipping wrapper install");
-    return;
-  }
+  const hasTui = existsSync(binTuiPath);
 
-  writeLog(configDir, "Installing oc wrapper pointing to " + binTuiPath);
+  if (hasTui) {
+    writeLog(configDir, "Installing oc wrapper with TUI at " + binTuiPath);
+  } else {
+    writeLog(configDir, "tui.js not found, installing simple passthrough oc wrapper");
+  }
 
   if (process.platform === "win32") {
     const cmdPath = join(binDir, "oc.cmd");
-    const tuiEscaped = binTuiPath.replace(/\\/g, "\\\\");
-    writeFileSync(cmdPath, `@echo off\r\nbun run "${tuiEscaped}" %*\r\n`, "utf-8");
+    if (hasTui) {
+      const tuiEscaped = binTuiPath.replace(/\\/g, "\\\\");
+      writeFileSync(cmdPath, `@echo off\r\nbun run "${tuiEscaped}" %*\r\n`, "utf-8");
+    } else {
+      writeFileSync(cmdPath, `@echo off\r\nopencode %*\r\n`, "utf-8");
+    }
     try { const fs = require("fs"); fs.unlinkSync(join(binDir, "oc")); } catch {}
   } else {
     const shPath = join(binDir, "oc");
-    const lines = [
-      "#!/usr/bin/env bash",
-      'export PATH="$HOME/.bun/bin:$PATH"',
-      'export OC_OUTPUT="${TEMP:-${TMPDIR:-/tmp}}/oc-dir-$$.txt"',
-      `bun run "${binTuiPath}" "$@"`,
-      "EXIT=$?",
-      'if [ $EXIT -eq 42 ]; then',
-      '  rm -f "$OC_OUTPUT"',
-      '  exec opencode "$@"',
-      "fi",
-      'if [ $EXIT -eq 0 ] && [ -f "$OC_OUTPUT" ]; then',
-      '  DIR=$(cat "$OC_OUTPUT")',
-      '  rm -f "$OC_OUTPUT"',
-      '  if [ -n "$DIR" ]; then cd "$DIR" && exec opencode; fi',
-      "fi",
-      'rm -f "$OC_OUTPUT"',
-      "exit $EXIT",
-    ];
+    const lines = hasTui
+      ? [
+          "#!/usr/bin/env bash",
+          'export PATH="$HOME/.bun/bin:$PATH"',
+          'export OC_OUTPUT="${TEMP:-${TMPDIR:-/tmp}}/oc-dir-$$.txt"',
+          `bun run "${binTuiPath}" "$@"`,
+          "EXIT=$?",
+          'if [ $EXIT -eq 42 ]; then',
+          '  rm -f "$OC_OUTPUT"',
+          '  exec opencode "$@"',
+          "fi",
+          'if [ $EXIT -eq 0 ] && [ -f "$OC_OUTPUT" ]; then',
+          '  DIR=$(cat "$OC_OUTPUT")',
+          '  rm -f "$OC_OUTPUT"',
+          '  if [ -n "$DIR" ]; then cd "$DIR" && exec opencode; fi',
+          "fi",
+          'rm -f "$OC_OUTPUT"',
+          "exit $EXIT",
+        ]
+      : [
+          "#!/usr/bin/env sh",
+          'exec opencode "$@"',
+        ];
     writeFileSync(shPath, lines.join("\n") + "\n", { mode: 0o755 });
     try { require("child_process").execSync(`chmod +x "${shPath}"`); } catch {}
     try { const fs = require("fs"); fs.unlinkSync(join(binDir, "oc.cmd")); } catch {}
   }
 
-  writeLog(configDir, "Wrapper installed successfully");
+  writeLog(configDir, "oc wrapper installed successfully");
 }
 
 export async function activate() {
