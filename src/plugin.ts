@@ -123,6 +123,23 @@ function installOcWrapper(configDir: string) {
   writeLog(configDir, "oc wrapper installed successfully");
 }
 
+export async function cleanup(configDir?: string) {
+  const resolvedConfigDir = configDir ?? getAppConfigDir();
+  const binDir = getBinDir();
+  const filesToRemove = [join(binDir, "oc"), join(binDir, "oc.cmd")];
+  for (const f of filesToRemove) {
+    try {
+      if (existsSync(f)) {
+        const { unlinkSync } = await import("fs");
+        unlinkSync(f);
+        writeLog(resolvedConfigDir, "cleanup: removed " + f);
+      }
+    } catch (e) {
+      writeLog(resolvedConfigDir, "cleanup: failed to remove " + f + ": " + e, true);
+    }
+  }
+}
+
 export async function activate() {
   const configDir = getAppConfigDir();
   writeLog(configDir, "OpenCode Loader activating");
