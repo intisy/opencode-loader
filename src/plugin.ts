@@ -71,7 +71,12 @@ function installOcWrapper(configDir: string) {
   if (!existsSync(binDir)) try { mkdirSync(binDir, { recursive: true }); } catch {}
 
   const pluginDir = dirname(fileURLToPath(import.meta.url));
-  const binTuiPath = join(pluginDir, "..", "core", "dist", "tui.js");
+  // when deployed to plugin/, only plugin.js is copied — the built TUI lives in the repos clone
+  const tuiCandidates = [
+    join(pluginDir, "..", "core", "dist", "tui.js"),
+    join(configDir, "repos", "opencode-loader", "core", "dist", "tui.js"),
+  ];
+  const binTuiPath = tuiCandidates.find((p) => existsSync(p)) ?? tuiCandidates[0];
   const hasTui = existsSync(binTuiPath);
 
   if (hasTui) {
