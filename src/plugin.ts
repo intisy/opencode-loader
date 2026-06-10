@@ -53,7 +53,16 @@ async function runEarlyLaunchHooks(configDir: string) {
   }
 
   try {
-    const updater = await import("plugin-updater");
+    let updater;
+    try {
+      updater = await import("plugin-updater");
+    } catch {
+      // opencode installs npm plugins into its package cache, which is not on
+      // the resolution path of deployed plugin files
+      const cachedUpdater = join(homedir(), ".cache", "opencode", "packages",
+        "plugin-updater@latest", "node_modules", "plugin-updater", "dist", "index.js");
+      updater = await import(cachedUpdater);
+    }
     writeLog(configDir, "Running plugin-updater earlyLaunch");
     await updater.earlyLaunch(configDir, gitPlugins);
     writeLog(configDir, "plugin-updater earlyLaunch complete");
