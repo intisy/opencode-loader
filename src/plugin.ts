@@ -80,56 +80,51 @@ function installOcWrapper(configDir: string) {
   if (!existsSync(binDir)) try { mkdirSync(binDir, { recursive: true }); } catch {}
 
   const pluginDir = dirname(fileURLToPath(import.meta.url));
-  // when deployed to plugin/, only plugin.js is copied — the built TUI lives in the repos clone
+  // resolved at every oc invocation, not at install time, so the wrapper
+  // works as soon as any copy of the TUI exists and never goes stale
   const tuiCandidates = [
     join(pluginDir, "..", "core", "dist", "tui.js"),
     join(configDir, "repos", "opencode-loader", "core", "dist", "tui.js"),
+    join(homedir(), ".cache", "opencode", "packages", "opencode-loader@latest", "node_modules", "opencode-loader", "core", "dist", "tui.js"),
   ];
-  const binTuiPath = tuiCandidates.find((p) => existsSync(p)) ?? tuiCandidates[0];
-  const hasTui = existsSync(binTuiPath);
-
-  if (hasTui) {
-    writeLog(configDir, "Installing oc wrapper with TUI at " + binTuiPath);
-  } else {
-    writeLog(configDir, "tui.js not found, installing simple passthrough oc wrapper");
-  }
+  writeLog(configDir, "Installing oc wrapper with runtime TUI resolution");
 
   if (process.platform === "win32") {
     const cmdPath = join(binDir, "oc.cmd");
-    if (hasTui) {
-      const tuiEscaped = binTuiPath.replace(/\\/g, "\\\\");
-      writeFileSync(cmdPath, `@echo off\r\nbun run "${tuiEscaped}" %*\r\n`, "utf-8");
-    } else {
-      writeFileSync(cmdPath, `@echo off\r\nopencode %*\r\n`, "utf-8");
+    const cmdLines = ["@echo off", "setlocal"];
+    for (const candidate of tuiCandidates) {
+      cmdLines.push(`if exist "${candidate}" ( bun run "${candidate}" %* & exit /b %errorlevel% )`);
     }
+    cmdLines.push("opencode %*");
+    writeFileSync(cmdPath, cmdLines.join("\r\n") + "\r\n", "utf-8");
     try { const fs = require("fs"); fs.unlinkSync(join(binDir, "oc")); } catch {}
   } else {
     const shPath = join(binDir, "oc");
-    const lines = hasTui
-      ? [
-          "#!/usr/bin/env bash",
-          'export PATH="$HOME/.bun/bin:$PATH"',
-          'if ! command -v bun &>/dev/null; then exec opencode "$@"; fi',
-          `if [ ! -f "${binTuiPath}" ]; then exec opencode "$@"; fi`,
-          'export OC_OUTPUT="${TEMP:-${TMPDIR:-/tmp}}/oc-dir-$$.txt"',
-          `bun run "${binTuiPath}" "$@"`,
-          "EXIT=$?",
-          'if [ $EXIT -eq 42 ]; then',
-          '  rm -f "$OC_OUTPUT"',
-          '  exec opencode "$@"',
-          "fi",
-          'if [ $EXIT -eq 0 ] && [ -f "$OC_OUTPUT" ]; then',
-          '  DIR=$(cat "$OC_OUTPUT")',
-          '  rm -f "$OC_OUTPUT"',
-          '  if [ -n "$DIR" ]; then cd "$DIR" && exec opencode; fi',
-          "fi",
-          'rm -f "$OC_OUTPUT"',
-          "exit $EXIT",
-        ]
-      : [
-          "#!/usr/bin/env sh",
-          'exec opencode "$@"',
-        ];
+    const lines = [
+      "#!/usr/bin/env bash",
+      'export PATH="$HOME/.bun/bin:$PATH"',
+      'TUI=""',
+      "for candidate in \\",
+      ...tuiCandidates.map((candidate, index) =>
+        `  "${candidate}"${index < tuiCandidates.length - 1 ? " \\" : "; do"}`),
+      '  if [ -f "$candidate" ]; then TUI="$candidate"; break; fi',
+      "done",
+      'if [ -z "$TUI" ] || ! command -v bun >/dev/null 2>&1; then exec opencode "$@"; fi',
+      'export OC_OUTPUT="${TEMP:-${TMPDIR:-/tmp}}/oc-dir-$$.txt"',
+      'bun run "$TUI" "$@"',
+      "EXIT=$?",
+      'if [ $EXIT -eq 42 ]; then',
+      '  rm -f "$OC_OUTPUT"',
+      '  exec opencode "$@"',
+      "fi",
+      'if [ $EXIT -eq 0 ] && [ -f "$OC_OUTPUT" ]; then',
+      '  DIR=$(cat "$OC_OUTPUT")',
+      '  rm -f "$OC_OUTPUT"',
+      '  if [ -n "$DIR" ]; then cd "$DIR" && exec opencode; fi',
+      "fi",
+      'rm -f "$OC_OUTPUT"',
+      "exit $EXIT",
+    ];
     writeFileSync(shPath, lines.join("\n") + "\n", { mode: 0o755 });
     try { require("child_process").execSync(`chmod +x "${shPath}"`); } catch {}
     try { const fs = require("fs"); fs.unlinkSync(join(binDir, "oc.cmd")); } catch {}
