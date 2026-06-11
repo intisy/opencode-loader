@@ -45,17 +45,6 @@ async function runEarlyLaunchHooks(configDir: string) {
     writeLog(configDir, "Updates driven by plugin-updater (activation context), skipping earlyLaunch");
     return;
   }
-  const pluginsJsonPath = join(configDir, "config", "plugins.json");
-  let gitPlugins: any[] = [];
-  if (existsSync(pluginsJsonPath)) {
-    try {
-      gitPlugins = JSON.parse(readFileSync(pluginsJsonPath, "utf-8"));
-      writeLog(configDir, "Found " + gitPlugins.length + " git plugins in plugins.json");
-    } catch (e) {
-      writeLog(configDir, "Failed to parse plugins.json: " + e, true);
-    }
-  }
-
   try {
     let updater;
     try {
@@ -67,7 +56,8 @@ async function runEarlyLaunchHooks(configDir: string) {
         "plugin-updater@latest", "node_modules", "plugin-updater", "dist", "index.js");
       updater = await import(cachedUpdater);
     }
-    writeLog(configDir, "Running plugin-updater earlyLaunch");
+    const gitPlugins = updater.getPlugins(configDir);
+    writeLog(configDir, "Running plugin-updater earlyLaunch for " + gitPlugins.length + " plugins");
     await updater.earlyLaunch(configDir, gitPlugins);
     writeLog(configDir, "plugin-updater earlyLaunch complete");
   } catch (e) {
