@@ -1,7 +1,7 @@
 import { existsSync, writeFileSync, mkdirSync, readFileSync, appendFileSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const START_TIME = new Date().toISOString().replace(/:/g, "-").split(".")[0];
 
@@ -74,6 +74,9 @@ function installOcWrapper(configDir: string) {
   if (!existsSync(binDir)) try { mkdirSync(binDir, { recursive: true }); } catch {}
 
   const pluginDir = dirname(fileURLToPath(import.meta.url));
+  // the built extension lives in the repo clone's dist/, where its sibling
+  // ../core-auth/dist resolves; the TUI loads it via HUB_TUI_EXTENSION
+  const extPath = join(configDir, "repos", "opencode-loader", "dist", "tui-extension.js");
   // resolved at every oc invocation, not at install time, so the wrapper
   // works as soon as any copy of the TUI exists and never goes stale
   const tuiCandidates = [
@@ -85,9 +88,16 @@ function installOcWrapper(configDir: string) {
 
   if (process.platform === "win32") {
     const cmdPath = join(binDir, "oc.cmd");
-    const cmdLines = ["@echo off", "setlocal"];
+    const cmdLines = [
+      "@echo off",
+      "setlocal",
+      `set "HUB_TUI_EXTENSION=${extPath}"`,
+      'set "_args=%*"',
+      // `oc auth ...` opens the Provider tab instead of forwarding to opencode
+      'if "%1"=="auth" ( set "HUB_OPEN_TAB=provider" & set "_args=" )',
+    ];
     for (const candidate of tuiCandidates) {
-      cmdLines.push(`if exist "${candidate}" ( bun run "${candidate}" %* & exit /b %errorlevel% )`);
+      cmdLines.push(`if exist "${candidate}" ( bun run "${candidate}" %_args% & exit /b %errorlevel% )`);
     }
     cmdLines.push("opencode %*");
     writeFileSync(cmdPath, cmdLines.join("\r\n") + "\r\n", "utf-8");
@@ -97,6 +107,7 @@ function installOcWrapper(configDir: string) {
     const lines = [
       "#!/usr/bin/env bash",
       'export PATH="$HOME/.bun/bin:$PATH"',
+      `export HUB_TUI_EXTENSION="${extPath}"`,
       'TUI=""',
       "for candidate in \\",
       ...tuiCandidates.map((candidate, index) =>
@@ -104,6 +115,8 @@ function installOcWrapper(configDir: string) {
       '  if [ -f "$candidate" ]; then TUI="$candidate"; break; fi',
       "done",
       'if [ -z "$TUI" ] || ! command -v bun >/dev/null 2>&1; then exec opencode "$@"; fi',
+      // `oc auth ...` opens the Provider tab instead of forwarding to opencode
+      'if [ "$1" = "auth" ]; then export HUB_OPEN_TAB="provider"; set --; fi',
       'export OC_OUTPUT="${TEMP:-${TMPDIR:-/tmp}}/oc-dir-$$.txt"',
       'bun run "$TUI" "$@"',
       "EXIT=$?",
@@ -147,6 +160,49 @@ export async function cleanup(configDir?: string) {
     }
   }
 }
+
+// OpenCode loads this deployed file as a plugin and invokes every export as a
+// hook. This one declares auth for the upstream provider and hands each
+// outbound request to core-auth's transport-agnostic router, which dispatches
+// to the active provider driver. core-auth is resolved by absolute path from
+// the repos clone: this file is deployed as a flat copy, so a relative import
+// to the sibling submodule would not exist next to it.
+let CORE_AUTH_ROUTE: ((request: Request) => Promise<Response>) | null = null;
+
+function deployedConfigDir(): string {
+  return dirname(dirname(fileURLToPath(import.meta.url)));
+}
+
+async function loadCoreAuthRoute() {
+  if (CORE_AUTH_ROUTE) return CORE_AUTH_ROUTE;
+  const configDir = deployedConfigDir();
+  if (!process.env.HUB_CONFIG_DIR) process.env.HUB_CONFIG_DIR = configDir;
+  const indexPath = join(configDir, "repos", "opencode-loader", "core-auth", "dist", "index.js");
+  if (!existsSync(indexPath)) {
+    writeLog(configDir, "core-auth not found at " + indexPath, true);
+    return null;
+  }
+  const mod = await import(pathToFileURL(indexPath).href);
+  CORE_AUTH_ROUTE = mod.route;
+  return CORE_AUTH_ROUTE;
+}
+
+export const CoreAuthProvider = async () => {
+  writeLog(deployedConfigDir(), "CoreAuthProvider registered (provider: anthropic)");
+  return {
+    auth: {
+      provider: "anthropic",
+      loader: async () => ({
+        apiKey: "core-auth",
+        async fetch(input: any, init: any) {
+          const route = await loadCoreAuthRoute();
+          if (!route) return fetch(input, init);
+          return route(new Request(input, init));
+        },
+      }),
+    },
+  };
+};
 
 export async function activate() {
   const configDir = getAppConfigDir();

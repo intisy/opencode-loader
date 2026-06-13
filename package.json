@@ -19,6 +19,7 @@
   "files": [
     "dist/",
     "core/dist/",
+    "core-auth/dist/",
     "README.md",
     "LICENSE"
   ],
@@ -26,7 +27,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "npx tsc --project core/tsconfig.json && npx tsc",
+    "build": "npx tsc --project core/tsconfig.json && npx tsc --project core-auth/tsconfig.json && npx tsc",
     "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

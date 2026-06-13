@@ -1,3 +1,6 @@
 [submodule "core"]
 	path = core
 	url = https://github.com/intisy/core-loader.git
+[submodule "core-auth"]
+	path = core-auth
+	url = https://github.com/intisy/core-auth.git
