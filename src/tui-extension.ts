@@ -65,7 +65,7 @@ function openProvider(p, tuiApi) {
 
 function render(state, h) {
   if (tab.mode === "menu" && tab.input) {
-    h.pushBody("  " + h.MAGENTA + "#" + h.GRAY + " " + (tab.input.title || "Input") + h.RST, false);
+    h.pushBody("  " + h.BOLD + h.WHITE + "" + (tab.input.title || "Input") + h.RST, false);
     if (tab.input.message) String(tab.input.message).split("\n").forEach(function (line) { h.pushBody("  " + h.DIM + line + h.RST, false); });
     h.pushBody("", false);
     h.pushBody("  " + h.YELLOW + "> " + h.RST + h.WHITE + (tab.inputBuf || "") + h.RST + h.DIM + "_" + h.RST, false);
@@ -77,12 +77,12 @@ function render(state, h) {
     var menu = curMenu();
     if (!menu) { exitMenu(); }
     else {
-      h.pushBody("  " + h.MAGENTA + "#" + h.GRAY + " " + (menu.title || "Menu") + h.RST, false);
+      h.pushBody("  " + h.BOLD + h.WHITE + "" + (menu.title || "Menu") + h.RST, false);
       if (menu.subtitle) h.pushBody("  " + h.DIM + menu.subtitle + h.RST, false);
       h.pushBody("", false);
       menu.items.forEach(function (it, i) {
         if (it.separator) { h.pushBody("", false); return; }
-        if (it.kind === "heading") { h.pushBody("  " + h.MAGENTA + "#" + h.GRAY + " " + it.label + h.RST, false); return; }
+        if (it.kind === "heading") { h.pushBody("  " + h.BOLD + h.WHITE + "" + it.label + h.RST, false); return; }
         var sel = i === tab.cur;
         // match the loader's row style: 3-space gutter / " > ", BG_SEL when selected
         var gutter = sel ? (h.YELLOW + " > " + h.RST) : "   ";
