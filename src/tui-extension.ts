@@ -32,7 +32,7 @@ function providers() {
 }
 
 // tab state: provider list, or an in-tab menu (a stack of model builders)
-var tab = { mode: "providers", cur: 0, stack: [], title: "", subtitle: "" };
+var tab = { mode: "providers", cur: 0, stack: [], input: null, inputBuf: "" };
 
 function curMenu() { return tab.stack.length ? tab.stack[tab.stack.length - 1]() : null; }
 function selectableIdx(items, from, dir) {
@@ -43,6 +43,7 @@ function selectableIdx(items, from, dir) {
 function exitMenu(tuiApi) { tab.mode = "providers"; tab.stack = []; tab.cur = 0; if (tuiApi && tuiApi.setTextInput) tuiApi.setTextInput(false); }
 function applyAction(a, tuiApi) {
   if (!a) return;
+  if (a.input) { tab.input = a.input; tab.inputBuf = ""; return; }   // collect a line of text in-tab
   if (a.push) { tab.stack.push(a.push); var m = curMenu(); tab.cur = m ? selectableIdx(m.items, -1, 1) : 0; }
   else if (a.pop) { if (tab.stack.length > 1) { tab.stack.pop(); tab.cur = 0; } else exitMenu(tuiApi); }
   else if (a.close) exitMenu(tuiApi);
@@ -63,6 +64,15 @@ function openProvider(p, tuiApi) {
 }
 
 function render(state, h) {
+  if (tab.mode === "menu" && tab.input) {
+    h.pushBody("  " + h.MAGENTA + "#" + h.GRAY + " " + (tab.input.title || "Input") + h.RST, false);
+    if (tab.input.message) String(tab.input.message).split("\n").forEach(function (line) { h.pushBody("  " + h.DIM + line + h.RST, false); });
+    h.pushBody("", false);
+    h.pushBody("  " + h.YELLOW + "> " + h.RST + h.WHITE + (tab.inputBuf || "") + h.RST + h.DIM + "_" + h.RST, false);
+    h.pushFoot("  " + h.GRAY + "-".repeat(h.barW) + h.RST);
+    h.pushFoot("  " + h.DIM + "Paste, then Enter   Esc Cancel" + h.RST);
+    return;
+  }
   if (tab.mode === "menu") {
     var menu = curMenu();
     if (!menu) { exitMenu(); }
@@ -97,17 +107,26 @@ function render(state, h) {
 }
 
 function handleKey(key, state, tuiApi) {
+  if (tab.mode === "menu" && tab.input) {
+    if (key === "escape") { tab.input = null; return; }                                  // cancel
+    if (key === "enter") { var c = tab.input.complete, buf = tab.inputBuf || ""; tab.input = null; tuiApi.runBlocking(async function () { try { applyAction(await c(buf), tuiApi); } catch (e) { process.stdout.write(String(e) + "\n"); } }); return; }
+    if (key === "backspace") { tab.inputBuf = (tab.inputBuf || "").slice(0, -1); return; }
+    if (key === "up" || key === "down" || key === "left" || key === "right" || key === "tab") return;  // ignore nav keys
+    if (typeof key === "string") { tab.inputBuf = (tab.inputBuf || "") + key; return; }    // printable / paste
+    return;
+  }
   if (tab.mode === "menu") {
     var menu = curMenu();
     if (!menu) { exitMenu(tuiApi); return; }
     if (key === "escape") { applyAction({ pop: true }, tuiApi); return; }
     if (key === "up" || key === "w") { tab.cur = selectableIdx(menu.items, tab.cur, -1); return; }
     if (key === "down" || key === "s") { tab.cur = selectableIdx(menu.items, tab.cur, 1); return; }
-    if (key === "enter" || key === "space") {
+    if (key === "enter") {
       var item = menu.items[tab.cur];
       if (!item || typeof item.run !== "function") return;
-      if (item.suspend) { tuiApi.runBlocking(async function () { try { applyAction(await item.run(), tuiApi); } catch (e) { process.stdout.write(String(e) + "\n"); } }); }
-      else { try { applyAction(item.run(), tuiApi); } catch (e) {} }
+      var r; try { r = item.run(); } catch (e) { return; }
+      if (r && typeof r.then === "function") tuiApi.runBlocking(async function () { try { applyAction(await r, tuiApi); } catch (e) { process.stdout.write(String(e) + "\n"); } });
+      else applyAction(r, tuiApi);
       return;
     }
     return;
