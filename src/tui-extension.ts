@@ -43,7 +43,18 @@ function selectableIdx(items, from, dir) {
 function exitMenu(tuiApi) { tab.mode = "providers"; tab.stack = []; tab.cur = 0; if (tuiApi && tuiApi.setTextInput) tuiApi.setTextInput(false); }
 function applyAction(a, tuiApi) {
   if (!a) return;
-  if (a.input) { tab.input = a.input; tab.inputBuf = ""; return; }   // collect a line of text in-tab
+  if (a.input) {
+    tab.input = a.input; tab.inputBuf = "";   // collect a line of text in-tab
+    var inp = a.input;
+    if (inp.background) {
+      // loopback auto-capture: if the browser completes the login while this paste
+      // field is still showing, apply it and drop the field (no paste needed)
+      inp.background.then(function (act) {
+        if (tab.input === inp && act) { tab.input = null; applyAction(act, tuiApi); if (tuiApi && tuiApi.refresh) tuiApi.refresh(); }
+      }).catch(function () {});
+    }
+    return;
+  }
   if (a.push) { tab.stack.push(a.push); var m = curMenu(); tab.cur = m ? selectableIdx(m.items, -1, 1) : 0; }
   else if (a.pop) { if (tab.stack.length > 1) { tab.stack.pop(); tab.cur = 0; } else exitMenu(tuiApi); }
   else if (a.close) exitMenu(tuiApi);
@@ -108,8 +119,13 @@ function render(state, h) {
 
 function handleKey(key, state, tuiApi) {
   if (tab.mode === "menu" && tab.input) {
-    if (key === "escape") { tab.input = null; return; }                                  // cancel
-    if (key === "enter") { var c = tab.input.complete, buf = tab.inputBuf || ""; tab.input = null; tuiApi.runBlocking(async function () { try { applyAction(await c(buf), tuiApi); } catch (e) { process.stdout.write(String(e) + "\n"); } }); return; }
+    if (key === "escape") { var inpE = tab.input; tab.input = null; if (inpE.onClose) { try { inpE.onClose(); } catch (e) {} } return; }   // cancel + release listener
+    if (key === "enter") {
+      // complete the paste live (no suspend) so the flow stays inside the chrome
+      var inp = tab.input, buf = tab.inputBuf || ""; tab.input = null;
+      Promise.resolve(inp.complete(buf)).then(function (a) { if (inp.onClose) { try { inp.onClose(); } catch (e) {} } applyAction(a, tuiApi); if (tuiApi.refresh) tuiApi.refresh(); }).catch(function (e) { try { tuiApi.flash(String(e && e.message || e)); } catch (x) {} if (tuiApi.refresh) tuiApi.refresh(); });
+      return;
+    }
     if (key === "backspace") { tab.inputBuf = (tab.inputBuf || "").slice(0, -1); return; }
     if (key === "up" || key === "down" || key === "left" || key === "right" || key === "tab") return;  // ignore nav keys
     if (typeof key === "string") { tab.inputBuf = (tab.inputBuf || "") + key; return; }    // printable / paste
@@ -125,8 +141,15 @@ function handleKey(key, state, tuiApi) {
       var item = menu.items[tab.cur];
       if (!item || typeof item.run !== "function") return;
       var r; try { r = item.run(); } catch (e) { return; }
-      if (r && typeof r.then === "function") tuiApi.runBlocking(async function () { try { applyAction(await r, tuiApi); } catch (e) { process.stdout.write(String(e) + "\n"); } });
-      else applyAction(r, tuiApi);
+      if (r && typeof r.then === "function") {
+        if (item.suspend) {
+          // suspend items (provider login(), proxy pickers, confirm) need a clean terminal
+          tuiApi.runBlocking(async function () { try { applyAction(await r, tuiApi); } catch (e) { process.stdout.write(String(e) + "\n"); } });
+        } else {
+          // async non-suspend (e.g. building an in-tab login input) resolves live, in chrome
+          r.then(function (a) { applyAction(a, tuiApi); if (tuiApi.refresh) tuiApi.refresh(); }).catch(function (e) { try { tuiApi.flash(String(e && e.message || e)); } catch (x) {} if (tuiApi.refresh) tuiApi.refresh(); });
+        }
+      } else applyAction(r, tuiApi);
       return;
     }
     return;
