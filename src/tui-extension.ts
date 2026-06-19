@@ -18,6 +18,18 @@ function modelsCache() { return readJSON(join(cfgFolder(), "core-auth-models.jso
 function coreConfig() { return readJSON(join(cfgFolder(), "core-auth.json"), {}); }
 function saveCoreConfig(cfg) { writeJSON(join(cfgFolder(), "core-auth.json"), cfg); }
 
+// Uniform model list for ANY provider: opencode.json provider.<id>.models is
+// where every provider (dynamic or static) merges its catalog, so all providers
+// list the same way regardless of whether they fetch models.
+function opencodeConfigPath() { return join(configDir(), existsSync(join(configDir(), "opencode.jsonc")) ? "opencode.jsonc" : "opencode.json"); }
+function opencodeModels(pid) {
+  var c = readJSON(opencodeConfigPath(), {});
+  var m = (c.provider && c.provider[pid] && c.provider[pid].models) || {};
+  return Object.keys(m).map(function (id) { return { id: id, name: stripSuffix((m[id] && m[id].name) || id) }; });
+}
+function stripSuffix(name) { return String(name).replace(/\s*\((Antigravity|Gemini CLI|Claude Code|Claude)\)\s*$/i, ""); }
+function hasAuto(pid) { return catalogRanking(pid).length > 0; }
+
 // Discover providers from every installed plugin's package.json claudeHub
 // declaration, unioned with whatever's already in the model cache. This is what
 // makes new providers appear automatically with zero changes in the provider.
@@ -39,11 +51,10 @@ function cliModels(pid) {
   var e = modelsCache()[pid]; var m = (e && e.models) || {}; var rank = catalogRanking(pid);
   return Object.keys(m).filter(function (k) { return k.indexOf("antigravity-") !== 0 && rank.indexOf(k) < 0; });
 }
-function modelCount(pid) { return catalogRanking(pid).length + cliModels(pid).length; }
+function modelCount(pid) { return opencodeModels(pid).length; }
 function cleanName(pid, key) {
   var e = modelsCache()[pid]; var m = e && e.models && e.models[key];
-  var n = (m && m.name) || key;
-  return n.replace(/\s*\((Antigravity|Gemini CLI)\)\s*$/i, "");
+  return stripSuffix((m && m.name) || key);
 }
 function nameOfRanked(pid, rawId) { return cleanName(pid, "antigravity-" + rawId); }
 
@@ -116,6 +127,21 @@ function render(state, h) {
     h.pushFoot("  " + h.DIM + "^v Move   Enter/r Source   Space Toggle   u/d Reorder   Esc Back" + h.RST);
     return;
   }
+  if (tab.mode === "browse" && tab.pid) {
+    var ms = opencodeModels(tab.pid);
+    h.pushBody("", false);
+    h.pushBody("  " + h.BOLD + h.WHITE + tab.pid + h.RST + h.GRAY + " — Models (" + ms.length + ")" + h.RST, false);
+    h.pushBody("  " + h.DIM + "This provider has no Auto ranking; models are listed for reference." + h.RST, false);
+    h.pushBody("", false);
+    if (!ms.length) h.pushBody("    " + h.DIM + "No models — sign in with oc auth login." + h.RST, false);
+    ms.forEach(function (m, i) {
+      var sel = tab.cur === i;
+      h.pushBody("  " + (sel ? h.YELLOW + "> " + h.RST : "  ") + (sel ? h.BG_SEL + h.BOLD + h.WHITE : h.GRAY) + m.name + h.RST + h.DIM + "  " + m.id + h.RST, sel);
+    });
+    h.pushFoot("  " + h.GRAY + "-".repeat(h.barW) + h.RST);
+    h.pushFoot("  " + h.DIM + "^v Move   Esc Back" + h.RST);
+    return;
+  }
   var pids = providerIds();
   h.pushBody("", false);
   h.pushBody("  " + h.BOLD + h.WHITE + "Providers" + h.RST + h.GRAY + " (" + pids.length + ")" + h.RST, false);
@@ -154,11 +180,18 @@ function handleKey(key, state, tuiApi) {
     if ((key === "d" || key === "]") && ac.source === "manual" && idx < ac.order.length - 1) { var dn = ac.order.slice(); var t2 = dn[idx + 1]; dn[idx + 1] = dn[idx]; dn[idx] = t2; setAuto(tab.pid, { order: dn }); tab.cur++; return; }
     return;
   }
+  if (tab.mode === "browse" && tab.pid) {
+    var ms = opencodeModels(tab.pid); var n = Math.max(1, ms.length);
+    if (key === "escape" || key === "q") { tab.mode = "providers"; tab.cur = 0; return; }
+    if (key === "up" || key === "w") { tab.cur = (tab.cur - 1 + n) % n; return; }
+    if (key === "down" || key === "s") { tab.cur = (tab.cur + 1) % n; return; }
+    return;
+  }
   var pids = providerIds();
   if (!pids.length) return;
   if (key === "up" || key === "w") { tab.pcur = (tab.pcur - 1 + pids.length) % pids.length; return; }
   if (key === "down" || key === "s") { tab.pcur = (tab.pcur + 1) % pids.length; return; }
-  if (key === "enter" || key === "space") { tab.pid = pids[tab.pcur]; tab.mode = "auto"; tab.cur = 0; return; }
+  if (key === "enter" || key === "space") { var pid = pids[tab.pcur]; tab.pid = pid; tab.mode = hasAuto(pid) ? "auto" : "browse"; tab.cur = 0; return; }
 }
 
 export default function (tuiApi) {
