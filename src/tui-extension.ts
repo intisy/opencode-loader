@@ -67,15 +67,17 @@ function render(state, h) {
     var menu = curMenu();
     if (!menu) { exitMenu(); }
     else {
-      h.pushBody("  " + h.BOLD + h.WHITE + (menu.title || "Menu") + h.RST, false);
+      h.pushBody("  " + h.MAGENTA + "#" + h.GRAY + " " + (menu.title || "Menu") + h.RST, false);
       if (menu.subtitle) h.pushBody("  " + h.DIM + menu.subtitle + h.RST, false);
       h.pushBody("", false);
       menu.items.forEach(function (it, i) {
         if (it.separator) { h.pushBody("", false); return; }
-        if (it.kind === "heading") { h.pushBody("  " + h.MAGENTA + it.label + h.RST, false); return; }
+        if (it.kind === "heading") { h.pushBody("  " + h.MAGENTA + "#" + h.GRAY + " " + it.label + h.RST, false); return; }
         var sel = i === tab.cur;
-        var color = sel ? (h.BG_SEL + h.BOLD + h.WHITE) : (it.color === "red" ? h.RED : it.color === "yellow" ? h.YELLOW : it.color === "green" ? h.GREEN : it.color === "cyan" ? h.CYAN : h.GRAY);
-        h.pushBody("  " + (sel ? h.YELLOW + "> " + h.RST : "  ") + color + it.label + h.RST + (it.hint ? h.DIM + "  " + it.hint + h.RST : ""), sel);
+        // match the loader's row style: 3-space gutter / " > ", BG_SEL when selected
+        var gutter = sel ? (h.YELLOW + " > " + h.RST) : "   ";
+        var body = sel ? (h.BG_SEL + h.BOLD + h.WHITE) : (it.color === "red" ? h.RED : h.GRAY);
+        h.pushBody("  " + gutter + body + it.label + h.RST + (it.hint ? h.DIM + "  " + it.hint + h.RST : ""), sel);
       });
       h.pushFoot("  " + h.GRAY + "-".repeat(h.barW) + h.RST);
       h.pushFoot("  " + h.DIM + "^v Move   Enter Select   Esc Back" + h.RST);
