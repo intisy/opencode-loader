@@ -1,10 +1,9 @@
 // @ts-nocheck
-// Loader-owned "Providers" tab (loaded via HUB_TUI_EXTENSION). Fully GENERIC and
-// thin: it auto-discovers providers from each installed plugin's package.json
-// claudeHub declaration, shows their model counts, and on Enter SUSPENDS the
-// loader TUI and runs that provider's shared menu() export — the exact same
-// core-auth menu (accounts + "Configure Auto models") that `oc auth login` opens.
-// No config/editor logic is duplicated here.
+// Loader-owned "Providers" tab (HUB_TUI_EXTENSION). Generic + thin: discovers
+// providers from each plugin's package.json claudeHub declaration, and on Enter
+// renders that provider's MENU MODEL (its handler's menuModel() export = core-auth
+// buildAccountMenu) natively, inside the loader chrome/style. The model + all its
+// logic live in core-auth (shared with `oc auth login`); this only draws it.
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
@@ -12,27 +11,19 @@ import { homedir } from "os";
 function configDir() { return process.env.HUB_CONFIG_DIR || join(homedir(), ".config", "opencode"); }
 function reposDir() { return join(configDir(), "repos"); }
 function readJSON(p, fallback) { try { return JSON.parse(readFileSync(p, "utf8")); } catch (e) { return fallback; } }
-
 function modelsCache() { return readJSON(join(configDir(), "config", "core-auth-models.json"), {}); }
 function opencodeConfigPath() { return join(configDir(), existsSync(join(configDir(), "opencode.jsonc")) ? "opencode.jsonc" : "opencode.json"); }
-function modelCount(pid) {
-  var c = readJSON(opencodeConfigPath(), {});
-  return Object.keys((c.provider && c.provider[pid] && c.provider[pid].models) || {}).length;
-}
+function modelCount(pid) { var c = readJSON(opencodeConfigPath(), {}); return Object.keys((c.provider && c.provider[pid] && c.provider[pid].models) || {}).length; }
 
-// Discover every installed provider from its package.json (zero per-provider code),
-// unioned with the model cache. Returns [{ id, handler }] (handler may be null).
 function providers() {
-  var out = []; var seen = {};
-  var repos = [];
+  var out = [], seen = {}, repos = [];
   try { repos = readdirSync(reposDir()); } catch (e) {}
   for (var i = 0; i < repos.length; i++) {
     var pkg = readJSON(join(reposDir(), repos[i], "package.json"), null);
     var declared = (pkg && pkg.claudeHub && pkg.claudeHub.authProviders) || (pkg && pkg.authProviders) || [];
     for (var j = 0; j < declared.length; j++) {
       var id = declared[j] && (declared[j].name || repos[i]);
-      if (!id || seen[id]) continue;
-      seen[id] = 1;
+      if (!id || seen[id]) continue; seen[id] = 1;
       out.push({ id: id, handler: declared[j].handler ? join(reposDir(), repos[i], declared[j].handler) : null });
     }
   }
@@ -40,30 +31,63 @@ function providers() {
   return out;
 }
 
-// suspend the loader TUI and run the provider's shared menu() — the same core-auth
-// menu `oc auth login` uses (accounts + Configure Auto models).
-function openProviderMenu(p, tuiApi) {
+// tab state: provider list, or an in-tab menu (a stack of model builders)
+var tab = { mode: "providers", cur: 0, stack: [], title: "", subtitle: "" };
+
+function curMenu() { return tab.stack.length ? tab.stack[tab.stack.length - 1]() : null; }
+function selectableIdx(items, from, dir) {
+  var n = items.length; if (!n) return 0;
+  for (var s = 1; s <= n; s++) { var i = ((from + dir * s) % n + n) % n; if (items[i] && typeof items[i].run === "function") return i; }
+  return from;
+}
+function exitMenu(tuiApi) { tab.mode = "providers"; tab.stack = []; tab.cur = 0; if (tuiApi && tuiApi.setTextInput) tuiApi.setTextInput(false); }
+function applyAction(a, tuiApi) {
+  if (!a) return;
+  if (a.push) { tab.stack.push(a.push); var m = curMenu(); tab.cur = m ? selectableIdx(m.items, -1, 1) : 0; }
+  else if (a.pop) { if (tab.stack.length > 1) { tab.stack.pop(); tab.cur = 0; } else exitMenu(tuiApi); }
+  else if (a.close) exitMenu(tuiApi);
+  // refresh / void: stay (render rebuilds)
+}
+
+function openProvider(p, tuiApi) {
   if (!p.handler || !existsSync(p.handler)) { try { tuiApi.flash("No menu for " + p.id); } catch (e) {} return; }
-  if (!tuiApi.runBlocking) { try { tuiApi.flash("Loader too old — update to manage providers"); } catch (e) {} return; }
+  if (!tuiApi.runBlocking || !tuiApi.setTextInput) { try { tuiApi.flash("Loader too old — update to manage providers"); } catch (e) {} return; }
   tuiApi.runBlocking(async function () {
     try {
       var mod = await import(p.handler);
-      if (typeof mod.menu === "function") await mod.menu();
+      if (typeof mod.menuModel === "function") { tab.stack = [mod.menuModel]; var m = curMenu(); tab.cur = m ? selectableIdx(m.items, -1, 1) : 0; tab.mode = "menu"; tuiApi.setTextInput(true); }
+      else if (typeof mod.menu === "function") await mod.menu();   // fallback: provider has no model, use its own menu
       else process.stdout.write(p.id + " has no menu.\n");
     } catch (e) { process.stdout.write("Menu failed: " + (e && e.message || e) + "\n"); }
   });
 }
 
-var tab = { cur: 0 };
-
 function render(state, h) {
+  if (tab.mode === "menu") {
+    var menu = curMenu();
+    if (!menu) { exitMenu(); }
+    else {
+      h.pushBody("  " + h.BOLD + h.WHITE + (menu.title || "Menu") + h.RST, false);
+      if (menu.subtitle) h.pushBody("  " + h.DIM + menu.subtitle + h.RST, false);
+      h.pushBody("", false);
+      menu.items.forEach(function (it, i) {
+        if (it.separator) { h.pushBody("", false); return; }
+        if (it.kind === "heading") { h.pushBody("  " + h.MAGENTA + it.label + h.RST, false); return; }
+        var sel = i === tab.cur;
+        var color = sel ? (h.BG_SEL + h.BOLD + h.WHITE) : (it.color === "red" ? h.RED : it.color === "yellow" ? h.YELLOW : it.color === "green" ? h.GREEN : it.color === "cyan" ? h.CYAN : h.GRAY);
+        h.pushBody("  " + (sel ? h.YELLOW + "> " + h.RST : "  ") + color + it.label + h.RST + (it.hint ? h.DIM + "  " + it.hint + h.RST : ""), sel);
+      });
+      h.pushFoot("  " + h.GRAY + "-".repeat(h.barW) + h.RST);
+      h.pushFoot("  " + h.DIM + "^v Move   Enter Select   Esc Back" + h.RST);
+      return;
+    }
+  }
   var ps = providers();
   h.pushBody("  " + h.BOLD + h.WHITE + "Providers" + h.RST + h.GRAY + " (" + ps.length + ")" + h.RST, false);
   h.pushBody("", false);
   if (!ps.length) h.pushBody("    " + h.DIM + "No providers installed." + h.RST, false);
   ps.forEach(function (p, i) {
-    var sel = tab.cur === i;
-    var c = modelCount(p.id);
+    var sel = tab.cur === i; var c = modelCount(p.id);
     h.pushBody("  " + (sel ? h.YELLOW + "> " + h.RST : "  ") + (sel ? h.BG_SEL + h.BOLD + h.WHITE : h.GRAY) + p.id + h.RST + h.DIM + "  " + (c ? c + " models" : "no models yet") + h.RST, sel);
   });
   h.pushFoot("  " + h.GRAY + "-".repeat(h.barW) + h.RST);
@@ -71,11 +95,26 @@ function render(state, h) {
 }
 
 function handleKey(key, state, tuiApi) {
+  if (tab.mode === "menu") {
+    var menu = curMenu();
+    if (!menu) { exitMenu(tuiApi); return; }
+    if (key === "escape") { applyAction({ pop: true }, tuiApi); return; }
+    if (key === "up" || key === "w") { tab.cur = selectableIdx(menu.items, tab.cur, -1); return; }
+    if (key === "down" || key === "s") { tab.cur = selectableIdx(menu.items, tab.cur, 1); return; }
+    if (key === "enter" || key === "space") {
+      var item = menu.items[tab.cur];
+      if (!item || typeof item.run !== "function") return;
+      if (item.suspend) { tuiApi.runBlocking(async function () { try { applyAction(await item.run(), tuiApi); } catch (e) { process.stdout.write(String(e) + "\n"); } }); }
+      else { try { applyAction(item.run(), tuiApi); } catch (e) {} }
+      return;
+    }
+    return;
+  }
   var ps = providers();
   if (!ps.length) return;
   if (key === "up" || key === "w") { tab.cur = (tab.cur - 1 + ps.length) % ps.length; return; }
   if (key === "down" || key === "s") { tab.cur = (tab.cur + 1) % ps.length; return; }
-  if (key === "enter" || key === "space") { openProviderMenu(ps[tab.cur], tuiApi); return; }
+  if (key === "enter" || key === "space") { openProvider(ps[tab.cur], tuiApi); return; }
 }
 
 export default function (tuiApi) {
