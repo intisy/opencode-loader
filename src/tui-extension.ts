@@ -49,19 +49,22 @@ function modelCount(pid) { return opencodeModels(pid).length; }
 function nameOf(pid, id) { var m = catalogModels(pid)[id]; return (m && m.name) || id; }
 function groupOf(pid, id) { var m = catalogModels(pid)[id]; return (m && m.group) || ""; }
 
-var SOURCE_CYCLE = { manual: "recommended", recommended: "leaderboard", leaderboard: "manual" };
-var SOURCE_LABEL = { manual: "Manual", recommended: "Recommended", leaderboard: "Leaderboard (quality)" };
+// Available sort sources: always Manual, plus whatever the provider advertised
+// in the cache (recommended/leaderboard/custom). Orders are precomputed by core.
+function autoSources(pid) { var e = modelsCache()[pid]; var extra = (e && Array.isArray(e.sorts)) ? e.sorts : []; return [{ id: "manual", label: "Manual" }].concat(extra); }
 
 function autoConfig(pid) {
   var stored = ((coreConfig().auto || {})[pid]) || {};
-  var cat = ranking(pid);
+  var e = modelsCache()[pid] || {};
+  var cat = e.ranking || [];
+  var sortOrders = e.sortOrders || {};
   function reconcile(ids) { var out = (Array.isArray(ids) ? ids : []).filter(function (id) { return cat.indexOf(id) >= 0; }); cat.forEach(function (id) { if (out.indexOf(id) < 0) out.push(id); }); return out; }
-  var source = (stored.source === "recommended" || stored.source === "leaderboard") ? stored.source : "manual";
-  var order = source === "recommended" ? cat.slice()
-    : source === "leaderboard" ? reconcile(stored.leaderboardOrder || [])
-    : reconcile(stored.order && stored.order.length ? stored.order : cat);
+  var sources = autoSources(pid);
+  var valid = sources.map(function (s) { return s.id; });
+  var source = (stored.source && valid.indexOf(stored.source) >= 0) ? stored.source : "manual";
+  var order = source === "manual" ? reconcile(stored.order && stored.order.length ? stored.order : cat) : reconcile(sortOrders[source] || cat);
   var excluded = (Array.isArray(stored.excluded) ? stored.excluded : []).filter(function (id) { return cat.indexOf(id) >= 0; });
-  return { order: order, excluded: excluded, source: source };
+  return { order: order, excluded: excluded, source: source, sources: sources };
 }
 function setAuto(pid, patch) {
   var cfg = coreConfig(); cfg.auto = cfg.auto || {}; var prev = cfg.auto[pid] || {};
@@ -97,8 +100,9 @@ function render(state, h) {
     h.pushBody("  " + h.BOLD + h.WHITE + tab.pid + h.RST + h.GRAY + " — Auto" + h.RST, false);
     h.pushBody("", false);
     var srcSel = tab.cur === 0;
-    h.pushBody("  " + (srcSel ? h.YELLOW + "> " : "  ") + (srcSel ? h.BG_SEL + h.BOLD + h.WHITE : h.CYAN) + "Source: " + SOURCE_LABEL[ac.source] + h.RST + (srcSel ? h.DIM + "   (Enter/r to change)" + h.RST : ""), srcSel);
-    h.pushBody("  " + h.DIM + (ac.source === "manual" ? "Tries top-to-bottom, skipping rate-limited models. u/d reorders." : ac.source === "recommended" ? "Auto-ordered by the provider's recommendation." : "Auto-ordered by quality; applies on next opencode start.") + h.RST, false);
+    var cur = ac.sources.filter(function (s) { return s.id === ac.source; })[0] || { label: ac.source };
+    h.pushBody("  " + (srcSel ? h.YELLOW + "> " : "  ") + (srcSel ? h.BG_SEL + h.BOLD + h.WHITE : h.CYAN) + "Sort: " + cur.label + h.RST + (srcSel && ac.sources.length > 1 ? h.DIM + "   (Enter/r to change)" + h.RST : ""), srcSel);
+    h.pushBody("  " + h.DIM + (ac.source === "manual" ? "Tries top-to-bottom, skipping rate-limited models. u/d reorders." : "Order is automatic (" + cur.label + "). Toggle include/exclude per model.") + h.RST, false);
     h.pushBody("", false);
     ac.order.forEach(function (id, i) {
       var sel = tab.cur === i + 1;
@@ -155,7 +159,12 @@ function handleKey(key, state, tuiApi) {
     if (key === "up" || key === "w") { tab.cur = (tab.cur - 1 + rows) % rows; return; }
     if (key === "down" || key === "s") { tab.cur = (tab.cur + 1) % rows; return; }
     if (tab.cur === 0) {
-      if (key === "r" || key === "enter" || key === "space") { var ns = SOURCE_CYCLE[ac.source]; setAuto(tab.pid, { source: ns }); if (tuiApi && tuiApi.flash) tuiApi.flash("Source: " + SOURCE_LABEL[ns] + (ns === "leaderboard" ? " (applies next start)" : "")); }
+      if ((key === "r" || key === "enter" || key === "space") && ac.sources.length > 1) {
+        var i = 0; for (var s = 0; s < ac.sources.length; s++) if (ac.sources[s].id === ac.source) i = s;
+        var next = ac.sources[(i + 1) % ac.sources.length];
+        setAuto(tab.pid, { source: next.id });   // orders are precomputed by core
+        if (tuiApi && tuiApi.flash) tuiApi.flash("Sort: " + next.label);
+      }
       return;
     }
     var idx = tab.cur - 1; var id = ac.order[idx];
