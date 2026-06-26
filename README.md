@@ -3,7 +3,7 @@
 
 [![npm version](https://img.shields.io/npm/v/opencode-hub)](https://www.npmjs.com/package/opencode-hub)
 [![npm downloads](https://img.shields.io/npm/dm/opencode-hub)](https://www.npmjs.com/package/opencode-hub)
-[![CI](https://github.com/intisy/opencode-hub/actions/workflows/publish.yml/badge.svg)](https://github.com/intisy/opencode-hub/actions/workflows/publish.yml)
+[![CI](https://github.com/intisy-ai/opencode-hub/actions/workflows/publish.yml/badge.svg)](https://github.com/intisy-ai/opencode-hub/actions/workflows/publish.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 TUI launcher and `oc` shell command for [OpenCode](https://github.com/sst/opencode).
@@ -29,12 +29,12 @@ When loaded as an OpenCode plugin, it installs the `oc` command into your shell.
 
 ### Option A — Via plugin-updater (recommended)
 
-If you have [opencode-plugin-updater](https://github.com/intisy/opencode-plugin-updater) installed, add this entry to `~/.config/opencode/config/plugins.json`:
+If you have [opencode-plugin-updater](https://github.com/intisy-ai/opencode-plugin-updater) installed, add this entry to `~/.config/opencode/config/plugins.json`:
 
 ```json
 {
   "name": "opencode-hub",
-  "url": "https://github.com/intisy/opencode-hub.git",
+  "url": "https://github.com/intisy-ai/opencode-hub.git",
   "install": null,
   "build": null,
   "bundle": null,
@@ -61,9 +61,9 @@ Restart OpenCode.
 ### Option C — Manual
 
 ```bash
-mkdir -p ~/.config/opencode/repos/intisy/opencode-hub
-git clone https://github.com/intisy/opencode-hub.git ~/.config/opencode/repos/intisy/opencode-hub
-cp ~/.config/opencode/repos/intisy/opencode-hub/plugin.js ~/.config/opencode/plugins/oc-launcher.js
+mkdir -p ~/.config/opencode/repos/intisy-ai/opencode-hub
+git clone https://github.com/intisy-ai/opencode-hub.git ~/.config/opencode/repos/intisy-ai/opencode-hub
+cp ~/.config/opencode/repos/intisy-ai/opencode-hub/plugin.js ~/.config/opencode/plugins/oc-launcher.js
 ```
 
 Register the plugin in `~/.config/opencode/opencode.json`:
