@@ -4,11 +4,15 @@
 // plugin/<name>.js), so its command shells point at the loader's real runtime
 // entry (where `../core/dist` resolves) rather than the {{BUNDLE}} convention.
 import { join } from "path";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from "fs";
 import { homedir } from "os";
-import { deployCommands, runConfigCli } from "../core/dist/index.js";
+import { runConfigCli } from "../core/dist/index.js";
 
 const PLUGIN = "opencode-loader";
+// opencode reads slash-commands from <configDir>/command/. The loader is
+// app-specific, so it deploys ONLY here (not cross-app like the dual plugins),
+// otherwise its /plugins + /accounts would collide with claude-code-loader's.
+const COMMAND_DIR = "command";
 
 // The loader's runtime entry: prefer the plugin-updater repo build, fall back to
 // opencode's package cache. Relative imports (../core/dist) resolve from here.
@@ -45,9 +49,25 @@ function commandDefs(entry) {
   ];
 }
 
+// render one command to its markdown file (mirrors core's command renderer, but
+// writes to a single app dir since the loader is app-specific).
+function render(def) {
+  const fm = ["---", `description: ${def.description}`];
+  if (def.argumentHint) fm.push(`argument-hint: ${def.argumentHint}`);
+  fm.push("---", "");
+  const lines = [fm.join("\n")];
+  if (def.shell) lines.push("!`" + def.shell + "`", "");
+  lines.push(def.body || "");
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
 export function deployLoaderCommands(configDir) {
   try {
-    deployCommands(PLUGIN, commandDefs(loaderEntry(configDir)));
+    const dir = join(configDir, COMMAND_DIR);
+    mkdirSync(dir, { recursive: true });
+    for (const def of commandDefs(loaderEntry(configDir))) {
+      writeFileSync(join(dir, `${def.name}.md`), render(def));
+    }
   } catch {
     /* best-effort */
   }
