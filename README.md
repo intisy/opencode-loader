@@ -84,6 +84,8 @@ Deployed automatically on activation to both apps' command directories (`~/.conf
 
 ## Configuration
 
+> Config files are **auto-created with defaults on first run** (via core `ensureConfig`). **Global console logging** for every plugin is toggled in `config/settings.json` (`logConsole: true`, the opencode.json-equivalent).
+
 Config file: `~/.config/opencode/config/opencode-loader.json` (preferred) or `~/.config/opencode/opencode-loader.json` (fallback).
 
 | Key | Type | Default | Description |
