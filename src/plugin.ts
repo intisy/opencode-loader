@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from "url";
 // @ts-ignore — generated bundle, no .d.ts
 import { maybeRunCli, deployLoaderCommands } from "./commands.js";
 // @ts-ignore — generated bundle, no .d.ts
-import { makeWriteLog } from "../core/dist/index.js";
+import { makeWriteLog, ensureConfig } from "../core/dist/index.js";
 
 // Slash-command invocations shell in as `node <this file> <action>`; handle them
 // first and exit, so command/config runs never go through plugin activation.
@@ -169,6 +169,7 @@ export async function cleanup(configDir?: string) {
 
 export async function activate() {
   const configDir = getAppConfigDir();
+  try { ensureConfig("opencode-loader", { logging: true }, configDir); } catch { /* best-effort */ }
   writeLog(configDir, "OpenCode Loader activating");
 
   try {
