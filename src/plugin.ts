@@ -221,19 +221,19 @@ export async function activate(input?: any) {
   return {
     "command.execute.before": async (cmdInput: any, output: any) => {
       if (!cmdInput || cmdInput.command !== "config") return;
-      let shown = false;
       try {
         const partsText = ((output && output.parts) || []).map((p: any) => (p && p.text) || "").join("");
         const message = summarizeConfig(partsText, cmdInput.arguments);
-        shown = (await client.tui.showToast({ body: { message, variant: "success" } })) === true;
+        const shown = (await client.tui.showToast({ body: { message, variant: "success" } })) === true;
+        // opencode does NOT let a command hook cancel the model turn: throwing is ignored
+        // (it sends the ORIGINAL prompt), and emptying output.parts only blanks it (the
+        // turn still runs). So the best we can do is blank the prompt when the toast showed
+        // — the toast carries the result; the model just gets an empty turn. A fully
+        // agent-free path isn't possible for a slash command in opencode (use the loader TUI).
+        if (shown && output && Array.isArray(output.parts)) output.parts.splice(0);
       } catch (e) {
         writeLog(configDir, "config toast hook failed: " + e, true);
       }
-      // Emptying output.parts only blanks the prompt — opencode still runs the model turn
-      // (it "answers nothing"). The only way to actually SKIP the turn is to throw, which
-      // aborts before the model is called. Throw ONLY when the toast displayed (TUI
-      // present), so headless `opencode run` / Claude Code keep the plain text fallback.
-      if (shown) throw new Error("config shown as toast");
     },
   };
 }
