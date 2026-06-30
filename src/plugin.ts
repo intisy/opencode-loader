@@ -106,7 +106,7 @@ function installOcWrapper(configDir: string) {
 
   if (process.platform === "win32") {
     const cmdPath = join(binDir, "oc.cmd");
-    const cmdLines = ["@echo off", "setlocal", `set "HUB_TUI_EXTENSION=${extPath}"`];
+    const cmdLines = ["@echo off", "setlocal", `set "HUB_TUI_EXTENSION=${extPath}"`, 'set "HUB_CONFIG_DIR=%USERPROFILE%\\.config\\opencode"'];
     for (const candidate of tuiCandidates) {
       cmdLines.push(`if exist "${candidate}" ( bun run "${candidate}" %* & exit /b %errorlevel% )`);
     }
@@ -119,6 +119,9 @@ function installOcWrapper(configDir: string) {
       "#!/usr/bin/env bash",
       'export PATH="$HOME/.bun/bin:$PATH"',
       `export HUB_TUI_EXTENSION="${extPath}"`,
+      // tell core-auth (loaded via each provider's handler) which app home we're in, so
+      // its model refresh writes opencode.json instead of falling back to ~/.claude
+      'export HUB_CONFIG_DIR="$HOME/.config/opencode"',
       'TUI=""',
       "for candidate in \\",
       ...tuiCandidates.map((candidate, index) =>
