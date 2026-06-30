@@ -173,26 +173,7 @@ export async function cleanup(configDir?: string) {
   }
 }
 
-// Condense the /config command's output into a single toast line. For set/get we echo
-// the arguments (the action is what matters); for a bare list we summarize the count.
-function summarizeConfig(partsText: string, args: string): string {
-  const a = String(args || "").trim();
-  const lines = String(partsText || "").split("\n").map((s) => s.trim()).filter(Boolean);
-  if (/\b(set|get)\b/.test(a)) {
-    const last = lines[lines.length - 1];
-    return last && /=/.test(last) ? last : (a ? "config " + a : "config updated");
-  }
-  if (lines.length === 1) return lines[0];
-  if (lines.length > 1) return "config: " + lines.length + " lines — use `/config <target> set <key> <value>`";
-  return a ? "config " + a : "config";
-}
-
-// opencode invokes the plugin's export with { client, $, ... } and uses the returned
-// hooks. We register command.execute.before so the /config command shows its result as
-// a bottom TUI toast instead of a chat message — and we ONLY suppress the model turn
-// when the toast actually displayed (showToast returns false headless), so `opencode
-// run` keeps the plain text fallback. Claude Code has no toast API, so this is opencode-only.
-export async function activate(input?: any) {
+export async function activate() {
   const configDir = getAppConfigDir();
   writeLog(configDir, "OpenCode Loader activating");
 
@@ -215,25 +196,5 @@ export async function activate(input?: any) {
   }
 
   writeLog(configDir, "OpenCode Loader activation complete");
-
-  const client = input && input.client;
-  if (!client || !client.tui || typeof client.tui.showToast !== "function") return {};
-  return {
-    "command.execute.before": async (cmdInput: any, output: any) => {
-      if (!cmdInput || cmdInput.command !== "config") return;
-      try {
-        const partsText = ((output && output.parts) || []).map((p: any) => (p && p.text) || "").join("");
-        const message = summarizeConfig(partsText, cmdInput.arguments);
-        const shown = (await client.tui.showToast({ body: { message, variant: "success" } })) === true;
-        // opencode does NOT let a command hook cancel the model turn: throwing is ignored
-        // (it sends the ORIGINAL prompt), and emptying output.parts only blanks it (the
-        // turn still runs). So the best we can do is blank the prompt when the toast showed
-        // — the toast carries the result; the model just gets an empty turn. A fully
-        // agent-free path isn't possible for a slash command in opencode (use the loader TUI).
-        if (shown && output && Array.isArray(output.parts)) output.parts.splice(0);
-      } catch (e) {
-        writeLog(configDir, "config toast hook failed: " + e, true);
-      }
-    },
-  };
+  return {};
 }
