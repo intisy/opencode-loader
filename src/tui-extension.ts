@@ -82,13 +82,13 @@ function render(state, h) {
     if (tab.input.pending) {
       // complete() is in flight (e.g. a slow token exchange) — show progress in
       // place of the field instead of closing the menu and surfacing the result later
-      h.pushBody("  " + h.YELLOW + (tab.input.pendingLabel || "Working…") + h.RST, false);
-      h.pushFoot("  " + h.GRAY + "-".repeat(h.barW) + h.RST);
+      h.pushBody("  " + h.ACCENT + (tab.input.pendingLabel || "Working…") + h.RST, false);
+      h.pushFoot("  " + h.GRAY + "─".repeat(h.barW) + h.RST);
       h.pushFoot("  " + h.DIM + "Please wait…" + h.RST);
       return;
     }
-    h.pushBody("  " + h.YELLOW + "> " + h.RST + h.WHITE + (tab.inputBuf || "") + h.RST + h.DIM + "_" + h.RST, false);
-    h.pushFoot("  " + h.GRAY + "-".repeat(h.barW) + h.RST);
+    h.pushBody("  " + h.ACCENT + "❯ " + h.RST + h.WHITE + (tab.inputBuf || "") + h.RST + h.DIM + "_" + h.RST, false);
+    h.pushFoot("  " + h.GRAY + "─".repeat(h.barW) + h.RST);
     h.pushFoot("  " + h.DIM + "Paste, then Enter   Esc Cancel" + h.RST);
     return;
   }
@@ -104,11 +104,11 @@ function render(state, h) {
         if (it.kind === "heading") { h.pushBody("  " + h.BOLD + h.WHITE + "" + it.label + h.RST, false); return; }
         var sel = i === tab.cur;
         // match the loader's row style: 3-space gutter / " > ", BG_SEL when selected
-        var gutter = sel ? (h.YELLOW + " > " + h.RST) : "   ";
+        var gutter = sel ? (h.ACCENT + " ❯ " + h.RST) : "   ";
         var body = sel ? (h.BG_SEL + h.BOLD + h.WHITE) : (it.color === "red" ? h.RED : h.GRAY);
         h.pushBody("  " + gutter + body + it.label + h.RST + (it.hint ? h.DIM + "  " + it.hint + h.RST : ""), sel);
       });
-      h.pushFoot("  " + h.GRAY + "-".repeat(h.barW) + h.RST);
+      h.pushFoot("  " + h.GRAY + "─".repeat(h.barW) + h.RST);
       h.pushFoot("  " + h.DIM + "^v Move   Enter Select   Esc Back" + h.RST);
       return;
     }
@@ -119,9 +119,9 @@ function render(state, h) {
   if (!ps.length) h.pushBody("    " + h.DIM + "No providers installed." + h.RST, false);
   ps.forEach(function (p, i) {
     var sel = tab.cur === i; var c = modelCount(p.id);
-    h.pushBody("  " + (sel ? h.YELLOW + "> " + h.RST : "  ") + (sel ? h.BG_SEL + h.BOLD + h.WHITE : h.GRAY) + p.id + h.RST + h.DIM + "  " + (c ? c + " models" : "no models yet") + h.RST, sel);
+    h.pushBody("  " + (sel ? h.ACCENT + "❯ " + h.RST : "  ") + (sel ? h.BG_SEL + h.BOLD + h.WHITE : h.GRAY) + p.id + h.RST + h.DIM + "  " + (c ? c + " models" : "no models yet") + h.RST, sel);
   });
-  h.pushFoot("  " + h.GRAY + "-".repeat(h.barW) + h.RST);
+  h.pushFoot("  " + h.GRAY + "─".repeat(h.barW) + h.RST);
   h.pushFoot("  " + h.DIM + "^v Move   Enter Configure (accounts + Auto)   Tab Switch   Q Quit" + h.RST);
 }
 
