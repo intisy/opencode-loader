@@ -288,6 +288,8 @@ export async function cleanup(configDir?: string) {
         writeLog(resolvedConfigDir, "cleanup: removed " + f);
       }
     } catch (e) {
+      // already gone (race / broken symlink) is the desired end state, not an error
+      if (e && e.code === "ENOENT") continue;
       writeLog(resolvedConfigDir, "cleanup: failed to remove " + f + ": " + e, true);
     }
   }
